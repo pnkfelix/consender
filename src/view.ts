@@ -155,6 +155,9 @@ function buildWindow(box: Box): HTMLElement {
 
   const body = document.createElement("div");
   body.className = "box-body";
+  for (const child of box.children) {
+    body.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+  }
   el.appendChild(body);
 
   const resizeHandle = document.createElement("div");
