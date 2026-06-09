@@ -5,16 +5,14 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: "gh-pages-deploy"
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,16 +21,24 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to gh-pages (preserve preview/)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add /tmp/gh-pages FETCH_HEAD
+          else
+            git worktree add --orphan -b gh-pages /tmp/gh-pages
+          fi
+
+          cd /tmp/gh-pages
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'preview' -exec rm -rf {} +
+          cp -r "${GITHUB_WORKSPACE}/dist/." .
+
+          git add -A
+          git diff --staged --quiet && echo "Nothing to commit" || \
+            git commit -m "Deploy main site from ${GITHUB_SHA}"
+          git push origin HEAD:gh-pages
