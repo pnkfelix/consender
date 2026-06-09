@@ -3,7 +3,7 @@ name: Deploy Site
 on:
   push:
     branches: ["main"]
-  pull_request:
+  pull_request_target:
     types: [labeled, unlabeled, closed]
 
 permissions:
