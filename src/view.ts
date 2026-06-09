@@ -122,9 +122,16 @@ function buildWindow(box: Box): HTMLElement {
   const label = document.createElement("span");
   label.className = "box-label";
   label.textContent = box.label;
-  label.contentEditable = "true";
-  label.addEventListener("blur", () => { box.label = label.textContent ?? box.label; });
   bar.appendChild(label);
+
+  const renameBtn = document.createElement("button");
+  renameBtn.title = "rename";
+  renameBtn.textContent = "✎";
+  renameBtn.onclick = () => {
+    const name = window.prompt("Name:", box.label);
+    if (name !== null && name.trim()) { box.label = name.trim(); render(); }
+  };
+  bar.appendChild(renameBtn);
 
   const iconBtn = document.createElement("button");
   iconBtn.title = "minimize";
@@ -163,8 +170,7 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
   const target = mover ?? handle;
 
   handle.addEventListener("pointerdown", (e: PointerEvent) => {
-    if ((e.target as HTMLElement).tagName === "BUTTON") return;
-    if ((e.target as HTMLElement).isContentEditable) return;
+    if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
 
@@ -180,13 +186,15 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       target.style.top = `${box.y}px`;
     };
 
-    const onUp = (): void => {
+    const cleanup = (): void => {
       handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointerup", cleanup);
+      handle.removeEventListener("pointercancel", cleanup);
     };
 
     handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointerup", cleanup);
+    handle.addEventListener("pointercancel", cleanup);
   });
 }
 
@@ -208,12 +216,14 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
       el.style.height = `${box.h}px`;
     };
 
-    const onUp = (): void => {
+    const cleanup = (): void => {
       handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointerup", cleanup);
+      handle.removeEventListener("pointercancel", cleanup);
     };
 
     handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointerup", cleanup);
+    handle.addEventListener("pointercancel", cleanup);
   });
 }
