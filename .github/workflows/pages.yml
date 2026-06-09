@@ -1,44 +1,104 @@
-name: Deploy to GitHub Pages
+name: Deploy Site
 
 on:
   push:
     branches: ["main"]
+  pull_request:
+    types: [labeled, unlabeled, closed]
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+  pull-requests: write
 
 concurrency:
-  group: "gh-pages-deploy"
-  cancel-in-progress: false
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm install
-      - run: npm run build
 
-      - name: Deploy to gh-pages (preserve preview/)
+      - name: Build main site
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm run build
+          mkdir -p combined
+          cp -r dist/. combined/
 
-          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
-            git fetch origin gh-pages
-            git worktree add /tmp/gh-pages FETCH_HEAD
-          else
-            git worktree add --orphan -b gh-pages /tmp/gh-pages
-          fi
+      - name: Build preview PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prs=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --label preview \
+            --state open \
+            --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"')
 
-          cd /tmp/gh-pages
-          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'preview' -exec rm -rf {} +
-          cp -r "${GITHUB_WORKSPACE}/dist/." .
+          while IFS=" " read -r number ref; do
+            [ -z "$number" ] && continue
+            echo "::group::PR #${number} (${ref})"
+            git fetch origin "refs/heads/${ref}"
+            git checkout FETCH_HEAD -- .
+            npx vite build --base="/consender/preview/pr-${number}/"
+            mkdir -p "combined/preview/pr-${number}"
+            cp -r dist/. "combined/preview/pr-${number}/"
+            git checkout origin/main -- .
+            echo "::endgroup::"
+          done <<< "$prs"
 
-          git add -A
-          git diff --staged --quiet && echo "Nothing to commit" || \
-            git commit -m "Deploy main site from ${GITHUB_SHA}"
-          git push origin HEAD:gh-pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: combined
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Post preview comment
+        if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'preview'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- preview-url -->';
+            const pr = context.payload.pull_request.number;
+            const url = `https://pnkfelix.github.io/consender/preview/pr-${pr}/`;
+            const body = `${marker}\n👁 Preview: ${url}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
