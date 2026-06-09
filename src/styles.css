@@ -76,6 +76,7 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 3px 8px rgba(0,0,0,0.18);
+  overflow: hidden;
 }
 
 .box-window-bar {
@@ -107,6 +108,27 @@ html, body, #app {
   padding: 6px;
   min-height: 60px;
 }
+
+/* ---- resize handle ---- */
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 13px;
+  height: 13px;
+  cursor: se-resize;
+  touch-action: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0px,
+    transparent 3px,
+    #999 3px,
+    #999 4px
+  );
+  opacity: 0.35;
+  z-index: 1;
+}
+.resize-handle:hover { opacity: 0.8; }
 
 /* ---- icon box ---- */
 .box-icon {

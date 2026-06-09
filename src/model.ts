@@ -8,6 +8,8 @@ export interface Box {
   parent: Box | null;
   x: number;
   y: number;
+  w: number;
+  h: number;
 }
 
 let nextId = 1;
@@ -25,6 +27,8 @@ export function createBox(label: string, parent: Box | null): Box {
     parent,
     x: 40 + Math.random() * 200,
     y: 40 + Math.random() * 120,
+    w: 200,
+    h: 140,
   };
 }
 
