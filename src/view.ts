@@ -109,8 +109,8 @@ function buildIcon(box: Box): HTMLElement {
 }
 
 const WINDOW_BAR_H = 44; // matches .box-window-bar min-height
-const MIN_BODY_W = 200;
-const MIN_BODY_H = 150;
+const MIN_BODY_W = 120;
+const MIN_BODY_H = 50;
 
 function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
