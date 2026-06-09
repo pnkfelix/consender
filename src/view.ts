@@ -108,6 +108,10 @@ function buildIcon(box: Box): HTMLElement {
   return el;
 }
 
+const WINDOW_BAR_H = 44; // matches .box-window-bar min-height
+const MIN_BODY_W = 200;
+const MIN_BODY_H = 150;
+
 function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-window";
@@ -155,6 +159,10 @@ function buildWindow(box: Box): HTMLElement {
 
   const body = document.createElement("div");
   body.className = "box-body";
+  const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
+  for (const child of box.children) {
+    body.appendChild(tooSmall || child.display === "icon" ? buildIcon(child) : buildWindow(child));
+  }
   el.appendChild(body);
 
   const resizeHandle = document.createElement("div");
