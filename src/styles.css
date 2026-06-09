@@ -13,7 +13,7 @@ html, body, #app {
   height: 100%;
   overflow: hidden;
   font-family: ui-monospace, "Menlo", "Consolas", monospace;
-  font-size: 14px;
+  font-size: 15px;
   background: var(--bg);
   color: var(--ink);
 }
@@ -30,36 +30,38 @@ html, body, #app {
 .box-titlebar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 48px;
   background: var(--bar-bg);
   color: var(--bar-ink);
   user-select: none;
   flex-shrink: 0;
-  font-size: 13px;
 }
 
 .box-titlebar button {
   font: inherit;
-  font-size: 12px;
-  padding: 2px 8px;
+  font-size: 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px solid #555;
   background: #3a3a3a;
   color: var(--bar-ink);
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 4px;
+  touch-action: manipulation;
 }
 
 .box-titlebar button:hover { background: #555; }
 
 /* breadcrumb */
-.breadcrumb { display: flex; align-items: center; gap: 2px; flex: 1; font-weight: 600; }
+.breadcrumb { display: flex; align-items: center; gap: 2px; flex: 1; font-weight: 600; font-size: 14px; }
 .crumb-sep { opacity: 0.45; }
-.crumb-link { cursor: pointer; opacity: 0.6; }
+.crumb-link { cursor: pointer; opacity: 0.6; padding: 4px; }
 .crumb-link:hover { opacity: 1; text-decoration: underline; }
 .crumb-current { opacity: 1; }
 
-/* ---- content area (holds windows + icons) ---- */
+/* ---- content area ---- */
 .box-content {
   flex: 1;
   position: relative;
@@ -69,13 +71,13 @@ html, body, #app {
 /* ---- window box ---- */
 .box-window {
   position: absolute;
-  min-width: 140px;
-  min-height: 90px;
   border: 1.5px solid var(--border);
   background: #fff;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 3px 8px rgba(0,0,0,0.18);
+  box-shadow: 2px 3px 10px rgba(0,0,0,0.2);
+  min-width: 120px;
+  min-height: 80px;
 }
 
 .box-window-bar {
@@ -84,6 +86,7 @@ html, body, #app {
   color: var(--ink);
   border-bottom: 1px solid var(--border);
   touch-action: none;
+  min-height: 44px;
 }
 
 .box-window-bar:active { cursor: grabbing; }
@@ -100,12 +103,35 @@ html, body, #app {
   flex: 1;
   outline: none;
   min-width: 1ch;
+  padding: 2px 4px;
 }
 
 .box-body {
   flex: 1;
   padding: 6px;
-  min-height: 60px;
+}
+
+/* ---- resize handle ---- */
+.box-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  cursor: se-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.box-resize::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 0 22px 22px;
+  border-color: transparent transparent var(--chrome) transparent;
+  opacity: 0.8;
 }
 
 /* ---- icon box ---- */
@@ -113,13 +139,14 @@ html, body, #app {
   position: absolute;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 44px;
   border: 1.5px solid var(--border);
   background: var(--chrome);
   cursor: grab;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
   box-shadow: 1px 2px 4px rgba(0,0,0,0.12);
   user-select: none;
   touch-action: none;
@@ -128,13 +155,15 @@ html, body, #app {
 .box-icon:active { cursor: grabbing; }
 
 .box-icon button {
-  font-size: 11px;
-  padding: 1px 4px;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 0 8px;
   border: 1px solid #999;
   background: var(--bg);
   color: var(--ink);
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 3px;
+  touch-action: manipulation;
 }
 
 .box-icon button:hover { background: #fff; }

@@ -113,6 +113,8 @@ function buildWindow(box: Box): HTMLElement {
   el.className = "box-window";
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
+  el.style.width = `${box.w}px`;
+  el.style.height = `${box.h}px`;
 
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
@@ -131,7 +133,7 @@ function buildWindow(box: Box): HTMLElement {
   bar.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
-  fullBtn.title = "zoom in (fullscreen)";
+  fullBtn.title = "zoom in";
   fullBtn.textContent = "⛶";
   fullBtn.onclick = () => { currentWorld = box; render(); };
   bar.appendChild(fullBtn);
@@ -148,7 +150,12 @@ function buildWindow(box: Box): HTMLElement {
   body.className = "box-body";
   el.appendChild(body);
 
+  const resizeHandle = document.createElement("div");
+  resizeHandle.className = "box-resize";
+  el.appendChild(resizeHandle);
+
   makeDraggable(bar, box, el);
+  makeResizable(resizeHandle, box, el);
   return el;
 }
 
@@ -171,6 +178,34 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       box.y = startBoxY + (ev.clientY - startY);
       target.style.left = `${box.x}px`;
       target.style.top = `${box.y}px`;
+    };
+
+    const onUp = (): void => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+  });
+}
+
+function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
+  handle.addEventListener("pointerdown", (e: PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handle.setPointerCapture(e.pointerId);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = box.w;
+    const startH = box.h;
+
+    const onMove = (ev: PointerEvent): void => {
+      box.w = Math.max(120, startW + (ev.clientX - startX));
+      box.h = Math.max(80, startH + (ev.clientY - startY));
+      el.style.width = `${box.w}px`;
+      el.style.height = `${box.h}px`;
     };
 
     const onUp = (): void => {

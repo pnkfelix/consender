@@ -8,6 +8,8 @@ export interface Box {
   parent: Box | null;
   x: number;
   y: number;
+  w: number;
+  h: number;
 }
 
 let nextId = 1;
@@ -23,8 +25,10 @@ export function createBox(label: string, parent: Box | null): Box {
     display: "window",
     children: [],
     parent,
-    x: 40 + Math.random() * 200,
-    y: 40 + Math.random() * 120,
+    x: 20 + Math.random() * 80,
+    y: 20 + Math.random() * 60,
+    w: 180,
+    h: 130,
   };
 }
 
@@ -32,14 +36,13 @@ export function createRoot(): Box {
   return createBox("world", null);
 }
 
-/** Wrap box in a new parent and return the parent. */
 export function wrapInParent(box: Box): Box {
   const parent = createBox("world", null);
   parent.children = [box];
   box.parent = parent;
   box.display = "window";
-  box.x = 60;
-  box.y = 60;
+  box.x = 40;
+  box.y = 40;
   return parent;
 }
 
