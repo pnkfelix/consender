@@ -8,6 +8,7 @@ import {
   mkRemoveBox,
   mkRenameBox,
   mkResizeBox,
+  mkSetBoxText,
   mkSetDisplay,
   mkWrapInParent,
   persist,
@@ -15,6 +16,8 @@ import {
   redoBox,
   undoBox,
 } from "./history.js";
+
+type LayoutMode = "absolute" | "float";
 
 let appEl!: HTMLElement;
 let root!: Box;
@@ -164,11 +167,15 @@ function buildCrumb(box: Box): HTMLElement {
   return el;
 }
 
-function buildIcon(box: Box): HTMLElement {
+function buildIcon(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-icon";
-  el.style.left = `${box.x}px`;
-  el.style.top = `${box.y}px`;
+  if (mode === "absolute") {
+    el.style.left = `${box.x}px`;
+    el.style.top = `${box.y}px`;
+  } else {
+    el.style.position = "relative";
+  }
 
   const label = document.createElement("span");
   label.textContent = box.label;
@@ -185,7 +192,11 @@ function buildIcon(box: Box): HTMLElement {
   };
   el.appendChild(expandBtn);
 
-  makeDraggable(el, box);
+  if (mode === "absolute") {
+    makeDraggable(el, box);
+  } else {
+    makeDraggableFloat(el, box, el);
+  }
   return el;
 }
 
@@ -193,11 +204,15 @@ const WINDOW_BAR_H = 44;
 const MIN_BODY_W = 120;
 const MIN_BODY_H = 50;
 
-function buildWindow(box: Box): HTMLElement {
+function buildWindow(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-window";
-  el.style.left = `${box.x}px`;
-  el.style.top = `${box.y}px`;
+  if (mode === "absolute") {
+    el.style.left = `${box.x}px`;
+    el.style.top = `${box.y}px`;
+  } else {
+    el.style.position = "relative";
+  }
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
 
@@ -268,6 +283,12 @@ function buildWindow(box: Box): HTMLElement {
   };
   bar.appendChild(redoBtn);
 
+  const textBtn = document.createElement("button");
+  textBtn.title = "edit text";
+  textBtn.textContent = "T";
+  if (box.text) textBtn.classList.add("box-btn-has-text");
+  bar.appendChild(textBtn);
+
   const delBtn = document.createElement("button");
   delBtn.title = "delete";
   delBtn.textContent = "✕";
@@ -286,16 +307,72 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
   const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
-  for (const child of box.children) {
-    body.appendChild(tooSmall || child.display === "icon" ? buildIcon(child) : buildWindow(child));
+
+  if (box.text) {
+    const sorted = [...box.children].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+    for (const child of sorted) {
+      const childEl = (tooSmall || child.display === "icon")
+        ? buildIcon(child, "float")
+        : buildWindow(child, "float");
+      childEl.style.float = child.x < box.w / 2 ? "left" : "right";
+      childEl.style.margin = "4px";
+      body.appendChild(childEl);
+    }
+    const textEl = document.createElement("p");
+    textEl.className = "box-text";
+    textEl.textContent = box.text;
+    body.appendChild(textEl);
+  } else {
+    for (const child of box.children) {
+      body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+    }
   }
+
+  textBtn.onclick = () => {
+    const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
+    if (existing) { existing.focus(); return; }
+    body.innerHTML = "";
+    const ta = document.createElement("textarea");
+    ta.className = "box-text-editor";
+    ta.value = box.text;
+    ta.placeholder = "Enter text…\n\nCtrl+Enter to save, Esc or click away to cancel.";
+    const save = () => {
+      const newText = ta.value;
+      if (newText !== box.text) {
+        const result = recordOn(root, worldId, mkSetBoxText(box, newText));
+        root = result.root;
+        worldId = result.worldId;
+      }
+      render();
+    };
+    ta.addEventListener("blur", render);
+    ta.addEventListener("keydown", (ke: KeyboardEvent) => {
+      ke.stopPropagation();
+      if (ke.key === "Escape") {
+        ke.preventDefault();
+        ta.removeEventListener("blur", render);
+        render();
+      } else if (ke.key === "Enter" && ke.ctrlKey) {
+        ke.preventDefault();
+        ta.removeEventListener("blur", render);
+        save();
+      }
+    });
+    body.appendChild(ta);
+    ta.focus();
+  };
+
   el.appendChild(body);
 
   const resizeHandle = document.createElement("div");
   resizeHandle.className = "box-resize";
   el.appendChild(resizeHandle);
 
-  makeDraggable(bar, box, el);
+  if (mode === "absolute") {
+    makeDraggable(bar, box, el);
+  } else {
+    makeDraggableFloat(bar, box, el);
+  }
   makeResizable(resizeHandle, box, el);
   return el;
 }
@@ -341,6 +418,54 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       box.y = startBoxY;
       target.style.left = `${box.x}px`;
       target.style.top = `${box.y}px`;
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onCancel);
+  });
+}
+
+function makeDraggableFloat(handle: HTMLElement, box: Box, target: HTMLElement): void {
+  handle.addEventListener("pointerdown", (e: PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startBoxX = box.x;
+    const startBoxY = box.y;
+
+    const onMove = (ev: PointerEvent): void => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      target.style.transform = `translate(${dx}px, ${dy}px)`;
+      target.style.opacity = "0.75";
+    };
+
+    const onUp = (ev: PointerEvent): void => {
+      target.style.transform = "";
+      target.style.opacity = "";
+      const newX = startBoxX + (ev.clientX - startX);
+      const newY = startBoxY + (ev.clientY - startY);
+      if (newX !== startBoxX || newY !== startBoxY) {
+        const op = mkMoveBox(box, newX, newY);
+        const result = recordOn(root, worldId, op);
+        root = result.root;
+        worldId = result.worldId;
+      }
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
+    };
+
+    const onCancel = (): void => {
+      target.style.transform = "";
+      target.style.opacity = "";
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onCancel);

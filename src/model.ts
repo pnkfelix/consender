@@ -6,6 +6,7 @@ export type Op =
   | { kind: "MoveBox";          id: string; x: number; y: number; prevX: number; prevY: number }
   | { kind: "ResizeBox";        id: string; w: number; h: number; prevW: number; prevH: number }
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
+  | { kind: "SetBoxText";       id: string; text: string; prevText: string }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
   | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
   | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
@@ -39,6 +40,7 @@ export interface SerializedBox {
   y: number;
   w: number;
   h: number;
+  text?: string;
 }
 
 export interface Box {
@@ -51,6 +53,7 @@ export interface Box {
   y: number;
   w: number;
   h: number;
+  text: string;
   undoStack: Op[];
   redoStack: Op[];
 }
@@ -80,6 +83,7 @@ export function createBox(label: string, parent: Box | null): Box {
     y: 20 + Math.random() * 60,
     w: 180,
     h: 130,
+    text: "",
     undoStack: [],
     redoStack: [],
   };
