@@ -506,6 +506,7 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
+        render();
       }
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
