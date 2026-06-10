@@ -41,7 +41,6 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
     y: box.y,
     w: box.w,
     h: box.h,
-    text: box.text || undefined,
   };
   for (const child of box.children) {
     collectSubtree(child, acc);
@@ -68,7 +67,6 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
       y: s.y,
       w: s.w,
       h: s.h,
-      text: s.text ?? "",
       undoStack: [],
       redoStack: [],
     };
@@ -96,7 +94,6 @@ function collectPersistedSubtree(
     y: box.y,
     w: box.w,
     h: box.h,
-    text: box.text || undefined,
     undoStack: box.undoStack,
     redoStack: box.redoStack,
   };
@@ -127,7 +124,6 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
       y: s.y,
       w: s.w,
       h: s.h,
-      text: s.text ?? "",
       undoStack: s.undoStack ?? [],
       redoStack: s.redoStack ?? [],
     };
@@ -149,8 +145,6 @@ export function invertOp(op: Op): Op {
       return { kind: "ResizeBox", id: op.id, w: op.prevW, h: op.prevH, prevW: op.w, prevH: op.h };
     case "RenameBox":
       return { kind: "RenameBox", id: op.id, label: op.prevLabel, prevLabel: op.label };
-    case "SetBoxText":
-      return { kind: "SetBoxText", id: op.id, text: op.prevText, prevText: op.text };
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
     case "AddBox":
@@ -187,11 +181,6 @@ export function applyOp(
     case "RenameBox": {
       const box = findBox(root, op.id);
       if (box) { box.label = op.label; }
-      return { root, worldId };
-    }
-    case "SetBoxText": {
-      const box = findBox(root, op.id);
-      if (box) { box.text = op.text; }
       return { root, worldId };
     }
     case "SetDisplay": {
@@ -233,7 +222,6 @@ export function applyOp(
         y: 0,
         w: 180,
         h: 130,
-        text: "",
         undoStack: [] as Op[],
         redoStack: [] as Op[],
       };
@@ -276,7 +264,6 @@ export function applyOp(
         y: op.groupY,
         w: op.groupW,
         h: op.groupH,
-        text: "",
         undoStack: [],
         redoStack: [],
       };
@@ -324,7 +311,6 @@ function stackBoxId(op: Op): string {
     case "MoveBox":
     case "ResizeBox":
     case "RenameBox":
-    case "SetBoxText":
     case "SetDisplay":
       return op.id;
     case "AddBox":
@@ -491,10 +477,6 @@ export function mkWrapInParent(box: Box): Op {
     prevX: box.x,
     prevY: box.y,
   };
-}
-
-export function mkSetBoxText(box: Box, newText: string): Op {
-  return { kind: "SetBoxText", id: box.id, text: newText, prevText: box.text };
 }
 
 // BAR_H must match .box-window-bar min-height in CSS
