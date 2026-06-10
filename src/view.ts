@@ -127,6 +127,12 @@ function buildWorld(box: Box): HTMLElement {
     content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
   }
   makeLassoGesture(content, box);
+  if (box.text) {
+    content.insertBefore(
+      buildTextLayer(box, window.innerWidth, window.innerHeight - 48),
+      content.firstChild
+    );
+  }
   el.appendChild(content);
 
   return el;
@@ -222,16 +228,15 @@ function freeSpans(
 
 // Builds the text overlay layer for a box that has text content.
 // Child boxes keep their absolute positions; text fills the gaps.
-function buildTextLayer(box: Box): HTMLElement {
+// bodyW/bodyH default to the box's own stored size; pass larger values for fullscreen.
+function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): HTMLElement {
   const layer = document.createElement("div");
   layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
 
-  const bodyW = box.w;
-  const bodyH = box.h - WINDOW_BAR_H;
-
   // Use canvas for accurate monospace glyph measurement.
   const cvs = document.createElement("canvas");
-  const ctx = cvs.getContext("2d")!;
+  const ctx = cvs.getContext("2d");
+  if (!ctx) return layer;
   ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
 
   const regions = box.children.map(c => ({
