@@ -185,6 +185,43 @@ function buildIcon(box: Box): HTMLElement {
   };
   el.appendChild(expandBtn);
 
+  const undoBtn = document.createElement("button");
+  undoBtn.title = "undo";
+  undoBtn.textContent = "↩";
+  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.onclick = () => {
+    const result = undoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(undoBtn);
+
+  const redoBtn = document.createElement("button");
+  redoBtn.title = "redo";
+  redoBtn.textContent = "↪";
+  redoBtn.disabled = box.redoStack.length === 0;
+  redoBtn.onclick = () => {
+    const result = redoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(redoBtn);
+
+  const delBtn = document.createElement("button");
+  delBtn.title = "delete";
+  delBtn.textContent = "✕";
+  delBtn.onclick = () => {
+    if (!box.parent) return;
+    const op = mkRemoveBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(delBtn);
+
   makeDraggable(el, box);
   return el;
 }
