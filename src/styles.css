@@ -135,6 +135,7 @@ html, body, #app {
   line-height: 1.55;
   color: var(--ink);
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .box-btn-has-text {
