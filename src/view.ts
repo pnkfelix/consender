@@ -4,6 +4,7 @@ import {
   findBox,
   loadOrInit,
   mkAddBox,
+  mkCollapseBox,
   mkGroupBoxes,
   mkMoveBox,
   mkRemoveBox,
@@ -396,6 +397,19 @@ function buildWindow(box: Box): HTMLElement {
   textBtn.textContent = "T";
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
+
+  const collapseBtn = document.createElement("button");
+  collapseBtn.title = "collapse into parent";
+  collapseBtn.textContent = "⤵";
+  collapseBtn.onclick = () => {
+    if (!box.parent) return;
+    const op = mkCollapseBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(collapseBtn);
 
   const delBtn = document.createElement("button");
   delBtn.title = "delete";

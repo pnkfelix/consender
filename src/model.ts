@@ -25,7 +25,23 @@ export type Op =
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
       groupInsertIndex: number;
-      worldPrevText?: string; worldNewText?: string; groupText?: string };
+      worldPrevText?: string; worldNewText?: string; groupText?: string }
+  | { kind: "CollapseBox";
+      boxId: string; parentId: string; boxIndex: number;
+      subtree: OpSubtree;
+      childIds: string[];
+      prevPositions: PositionRecord[];
+      newPositions: PositionRecord[];
+      parentPrevText: string;
+      parentNewText: string; }
+  | { kind: "UncollapseBox";
+      boxId: string; parentId: string; boxIndex: number;
+      subtree: OpSubtree;
+      childIds: string[];
+      prevPositions: PositionRecord[];
+      newPositions: PositionRecord[];
+      parentPrevText: string;
+      parentNewText: string; };
 
 export interface OpSubtree {
   rootId: string;
