@@ -1,5 +1,32 @@
 export type DisplayMode = "icon" | "window";
 
+export type Op =
+  | { kind: "MoveBox";          id: string; x: number; y: number; prevX: number; prevY: number }
+  | { kind: "ResizeBox";        id: string; w: number; h: number; prevW: number; prevH: number }
+  | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
+  | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
+  | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
+  | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
+  | { kind: "WrapInParent";     wrapperId: string; childId: string; prevX: number; prevY: number }
+  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; prevX: number; prevY: number };
+
+export interface OpSubtree {
+  rootId: string;
+  boxes: Record<string, SerializedBox>;
+}
+
+export interface SerializedBox {
+  id: string;
+  label: string;
+  display: DisplayMode;
+  childIds: string[];
+  parentId: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Box {
   id: string;
   label: string;
@@ -10,12 +37,22 @@ export interface Box {
   y: number;
   w: number;
   h: number;
+  undoStack: Op[];
+  redoStack: Op[];
 }
 
 let nextId = 1;
 
-function freshId(): string {
+export function freshId(): string {
   return `b${nextId++}`;
+}
+
+export function getNextId(): number {
+  return nextId;
+}
+
+export function setNextId(n: number): void {
+  nextId = n;
 }
 
 export function createBox(label: string, parent: Box | null): Box {
@@ -29,6 +66,8 @@ export function createBox(label: string, parent: Box | null): Box {
     y: 20 + Math.random() * 60,
     w: 180,
     h: 130,
+    undoStack: [],
+    redoStack: [],
   };
 }
 
