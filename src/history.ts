@@ -4,15 +4,15 @@ import {
   getNextId,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Op, OpSubtree, PositionRecord, SerializedBox } from "./model.js";
+import type { Box, DisplayMode, Guard, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
 
-export type { Op, OpSubtree, SerializedBox };
+export type { Guard, Op, OpSubtree, SerializedBox, StackEntry };
 
 const STORAGE_KEY = "consender-state";
 
 interface PersistedSerializedBox extends SerializedBox {
-  undoStack: Op[];
-  redoStack: Op[];
+  undoStack: StackEntry[];
+  redoStack: StackEntry[];
 }
 
 interface PersistedState {
@@ -113,6 +113,10 @@ export function serializeFullTree(
   return { rootId: root.id, boxes };
 }
 
+function migrateStackEntries(raw: any[]): StackEntry[] {
+  return raw.map(e => ('op' in e ? e as StackEntry : { op: e as Op }));
+}
+
 export function deserializeFullTree(data: PersistedState["tree"]): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(data.boxes)) {
@@ -128,8 +132,8 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
       w: s.w,
       h: s.h,
       text: s.text ?? "",
-      undoStack: s.undoStack ?? [],
-      redoStack: s.redoStack ?? [],
+      undoStack: migrateStackEntries(s.undoStack ?? []),
+      redoStack: migrateStackEntries(s.redoStack ?? []),
     };
   }
   for (const id of Object.keys(data.boxes)) {
@@ -234,8 +238,8 @@ export function applyOp(
         w: 180,
         h: 130,
         text: "",
-        undoStack: [] as Op[],
-        redoStack: [] as Op[],
+        undoStack: [] as StackEntry[],
+        redoStack: [] as StackEntry[],
       };
       child.parent = wrapper;
       child.display = "window";
@@ -326,13 +330,15 @@ export function applyOp(
   }
 }
 
-function stackBoxId(op: Op): string {
+function stackBoxId(op: Op, root: Box): string | null {
   switch (op.kind) {
     case "MoveBox":
     case "ResizeBox":
     case "RenameBox":
-    case "SetBoxText":
+      return findBox(root, op.id)?.parent?.id ?? op.id;
     case "SetDisplay":
+      return null;
+    case "SetBoxText":
       return op.id;
     case "AddBox":
     case "RemoveBox":
@@ -346,17 +352,47 @@ function stackBoxId(op: Op): string {
   }
 }
 
+function evaluateGuard(guard: Guard, root: Box): boolean {
+  switch (guard.kind) {
+    case "wrapperIsClean": {
+      const wrapper = findBox(root, guard.wrapperId);
+      if (!wrapper) return true;
+      return (
+        wrapper.children.length === 1 &&
+        wrapper.children[0].id === guard.childId &&
+        wrapper.undoStack.length === 0
+      );
+    }
+  }
+}
+
+function guardForOp(op: Op): Guard | undefined {
+  if (op.kind === "WrapInParent") {
+    return { kind: "wrapperIsClean", wrapperId: op.wrapperId, childId: op.childId };
+  }
+  return undefined;
+}
+
+export function canUndo(box: Box, root: Box): boolean {
+  const entry = box.undoStack[box.undoStack.length - 1];
+  if (!entry) return false;
+  if (entry.guard && !evaluateGuard(entry.guard, root)) return false;
+  return true;
+}
+
 export function recordOn(
   root: Box,
   worldId: string,
   op: Op
 ): { root: Box; worldId: string } {
   const result = applyOp(root, worldId, op);
-  const stackId = stackBoxId(op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.undoStack.push(op);
-    stackBox.redoStack = [];
+  const stackId = stackBoxId(op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.undoStack.push({ op, guard: guardForOp(op) });
+      stackBox.redoStack = [];
+    }
   }
   persist(result.root, result.worldId);
   return result;
@@ -367,13 +403,17 @@ export function undoBox(
   root: Box,
   worldId: string
 ): { root: Box; worldId: string } {
-  const op = box.undoStack.pop();
-  if (!op) return { root, worldId };
-  const result = applyOp(root, worldId, invertOp(op));
-  const stackId = stackBoxId(op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.redoStack.push(op);
+  const entry = box.undoStack[box.undoStack.length - 1];
+  if (!entry) return { root, worldId };
+  if (entry.guard && !evaluateGuard(entry.guard, root)) return { root, worldId };
+  box.undoStack.pop();
+  const result = applyOp(root, worldId, invertOp(entry.op));
+  const stackId = stackBoxId(entry.op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.redoStack.push(entry);
+    }
   }
   persist(result.root, result.worldId);
   return result;
@@ -384,13 +424,15 @@ export function redoBox(
   root: Box,
   worldId: string
 ): { root: Box; worldId: string } {
-  const op = box.redoStack.pop();
-  if (!op) return { root, worldId };
-  const result = applyOp(root, worldId, op);
-  const stackId = stackBoxId(op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.undoStack.push(op);
+  const entry = box.redoStack.pop();
+  if (!entry) return { root, worldId };
+  const result = applyOp(root, worldId, entry.op);
+  const stackId = stackBoxId(entry.op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.undoStack.push(entry);
+    }
   }
   persist(result.root, result.worldId);
   return result;

@@ -45,6 +45,11 @@ export interface SerializedBox {
   text?: string;
 }
 
+export type Guard =
+  | { kind: "wrapperIsClean"; wrapperId: string; childId: string };
+
+export type StackEntry = { op: Op; guard?: Guard };
+
 export interface Box {
   id: string;
   label: string;
@@ -56,8 +61,8 @@ export interface Box {
   w: number;
   h: number;
   text: string;
-  undoStack: Op[];
-  redoStack: Op[];
+  undoStack: StackEntry[];
+  redoStack: StackEntry[];
 }
 
 let nextId = 1;
