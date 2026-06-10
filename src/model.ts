@@ -17,13 +17,15 @@ export type Op =
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
-      groupInsertIndex: number }
+      groupInsertIndex: number;
+      worldPrevText?: string; worldNewText?: string; groupText?: string }
   | { kind: "UngroupBoxes";
       worldId: string; groupId: string;
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
-      groupInsertIndex: number };
+      groupInsertIndex: number;
+      worldPrevText?: string; worldNewText?: string; groupText?: string };
 
 export interface OpSubtree {
   rootId: string;
