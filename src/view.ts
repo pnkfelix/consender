@@ -17,8 +17,6 @@ import {
   undoBox,
 } from "./history.js";
 
-type LayoutMode = "absolute" | "float";
-
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
@@ -167,15 +165,11 @@ function buildCrumb(box: Box): HTMLElement {
   return el;
 }
 
-function buildIcon(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
+function buildIcon(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-icon";
-  if (mode === "absolute") {
-    el.style.left = `${box.x}px`;
-    el.style.top = `${box.y}px`;
-  } else {
-    el.style.position = "relative";
-  }
+  el.style.left = `${box.x}px`;
+  el.style.top = `${box.y}px`;
 
   const label = document.createElement("span");
   label.textContent = box.label;
@@ -192,27 +186,96 @@ function buildIcon(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
   };
   el.appendChild(expandBtn);
 
-  if (mode === "absolute") {
-    makeDraggable(el, box);
-  } else {
-    makeDraggableFloat(el, box, el);
-  }
+  makeDraggable(el, box);
   return el;
 }
 
 const WINDOW_BAR_H = 44;
 const MIN_BODY_W = 120;
 const MIN_BODY_H = 50;
+const BODY_PAD = 6;
+const TEXT_SIZE = 13;
+const LINE_H = Math.ceil(TEXT_SIZE * 1.55);
 
-function buildWindow(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
+// Returns horizontal free spans [start, end] at a given text-line band,
+// after subtracting the footprints of all child boxes (plus a small gap).
+function freeSpans(
+  lineY: number,
+  minX: number, maxX: number,
+  regions: Array<{ x: number; y: number; w: number; h: number }>
+): Array<[number, number]> {
+  const GAP = 4;
+  let spans: Array<[number, number]> = [[minX, maxX]];
+  for (const r of regions) {
+    if (r.y + r.h <= lineY || r.y >= lineY + LINE_H) continue;
+    const rx = r.x - GAP, re = r.x + r.w + GAP;
+    const next: Array<[number, number]> = [];
+    for (const [sx, ex] of spans) {
+      if (re <= sx || rx >= ex) { next.push([sx, ex]); continue; }
+      if (sx < rx) next.push([sx, rx]);
+      if (re < ex) next.push([re, ex]);
+    }
+    spans = next;
+  }
+  return spans;
+}
+
+// Builds the text overlay layer for a box that has text content.
+// Child boxes keep their absolute positions; text fills the gaps.
+function buildTextLayer(box: Box): HTMLElement {
+  const layer = document.createElement("div");
+  layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
+
+  const bodyW = box.w;
+  const bodyH = box.h - WINDOW_BAR_H;
+
+  // Use canvas for accurate monospace glyph measurement.
+  const cvs = document.createElement("canvas");
+  const ctx = cvs.getContext("2d")!;
+  ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
+
+  const regions = box.children.map(c => ({
+    x: c.x,
+    y: c.y,
+    w: c.display === "window" ? c.w : Math.max(80, ctx.measureText(c.label).width + 68),
+    h: c.display === "window" ? c.h : 44,
+  }));
+
+  const words = box.text.split(/\s+/).filter(Boolean);
+  let wi = 0;
+
+  for (let y = BODY_PAD; wi < words.length && y + LINE_H <= bodyH - BODY_PAD; y += LINE_H) {
+    const spans = freeSpans(y, BODY_PAD, bodyW - BODY_PAD, regions);
+    for (const [sx, ex] of spans) {
+      const avail = ex - sx;
+      if (avail < TEXT_SIZE * 2) continue;
+      const lineWords: string[] = [];
+      let lineW = 0;
+      while (wi < words.length) {
+        const sep = lineWords.length > 0 ? " " : "";
+        const cw = ctx.measureText(sep + words[wi]).width;
+        if (lineWords.length > 0 && lineW + cw > avail) break;
+        lineWords.push(words[wi++]);
+        lineW += cw;
+      }
+      if (lineWords.length > 0) {
+        const s = document.createElement("span");
+        s.className = "box-text";
+        s.style.cssText = `position:absolute;left:${sx}px;top:${y}px;white-space:nowrap;`;
+        s.textContent = lineWords.join(" ");
+        layer.appendChild(s);
+      }
+    }
+  }
+
+  return layer;
+}
+
+function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-window";
-  if (mode === "absolute") {
-    el.style.left = `${box.x}px`;
-    el.style.top = `${box.y}px`;
-  } else {
-    el.style.position = "relative";
-  }
+  el.style.left = `${box.x}px`;
+  el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
 
@@ -308,57 +371,60 @@ function buildWindow(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
   body.className = "box-body";
   const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
 
+  // Child boxes always use absolute positioning — unchanged from text-free behavior.
+  // The text layer (when present) is inserted first so it paints behind the boxes.
+  for (const child of box.children) {
+    body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+  }
   if (box.text) {
-    const sorted = [...box.children].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
-    for (const child of sorted) {
-      const childEl = (tooSmall || child.display === "icon")
-        ? buildIcon(child, "float")
-        : buildWindow(child, "float");
-      childEl.style.float = child.x < box.w / 2 ? "left" : "right";
-      childEl.style.margin = "4px";
-      body.appendChild(childEl);
-    }
-    const textEl = document.createElement("p");
-    textEl.className = "box-text";
-    textEl.textContent = box.text;
-    body.appendChild(textEl);
-  } else {
-    for (const child of box.children) {
-      body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
-    }
+    body.insertBefore(buildTextLayer(box), body.firstChild);
   }
 
   textBtn.onclick = () => {
-    const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
-    if (existing) { existing.focus(); return; }
+    const existing = body.querySelector(".box-text-editor") as HTMLElement | null;
+    if (existing) { (existing.querySelector("textarea") as HTMLTextAreaElement | null)?.focus(); return; }
     body.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "box-text-editor";
+    wrapper.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;";
+
     const ta = document.createElement("textarea");
-    ta.className = "box-text-editor";
     ta.value = box.text;
-    ta.placeholder = "Enter text…\n\nCtrl+Enter to save, Esc or click away to cancel.";
-    const save = () => {
+    ta.placeholder = "Enter text…";
+    ta.style.cssText = "flex:1;resize:none;font:inherit;font-size:13px;border:none;outline:none;padding:6px;background:#fffff8;color:var(--ink);line-height:1.55;";
+
+    const btnBar = document.createElement("div");
+    btnBar.style.cssText = "display:flex;gap:4px;padding:4px;background:var(--chrome);border-top:1px solid var(--border);flex-shrink:0;";
+
+    const makeEditorBtn = (label: string): HTMLButtonElement => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = "flex:1;font:inherit;font-size:13px;padding:4px 0;cursor:pointer;border:1px solid #999;background:var(--bg);border-radius:3px;";
+      btnBar.appendChild(b);
+      return b;
+    };
+
+    makeEditorBtn("Save").onclick = () => {
       const newText = ta.value;
       if (newText !== box.text) {
         const result = recordOn(root, worldId, mkSetBoxText(box, newText));
         root = result.root;
         worldId = result.worldId;
+      } else {
+        render();
       }
-      render();
     };
-    ta.addEventListener("blur", render);
+    makeEditorBtn("Cancel").onclick = () => render();
+
     ta.addEventListener("keydown", (ke: KeyboardEvent) => {
       ke.stopPropagation();
-      if (ke.key === "Escape") {
-        ke.preventDefault();
-        ta.removeEventListener("blur", render);
-        render();
-      } else if (ke.key === "Enter" && ke.ctrlKey) {
-        ke.preventDefault();
-        ta.removeEventListener("blur", render);
-        save();
-      }
+      if (ke.key === "Escape") { ke.preventDefault(); render(); }
     });
-    body.appendChild(ta);
+
+    wrapper.appendChild(ta);
+    wrapper.appendChild(btnBar);
+    body.appendChild(wrapper);
     ta.focus();
   };
 
@@ -368,11 +434,7 @@ function buildWindow(box: Box, mode: LayoutMode = "absolute"): HTMLElement {
   resizeHandle.className = "box-resize";
   el.appendChild(resizeHandle);
 
-  if (mode === "absolute") {
-    makeDraggable(bar, box, el);
-  } else {
-    makeDraggableFloat(bar, box, el);
-  }
+  makeDraggable(bar, box, el);
   makeResizable(resizeHandle, box, el);
   return el;
 }
@@ -418,54 +480,6 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       box.y = startBoxY;
       target.style.left = `${box.x}px`;
       target.style.top = `${box.y}px`;
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
-      handle.removeEventListener("pointercancel", onCancel);
-    };
-
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-    handle.addEventListener("pointercancel", onCancel);
-  });
-}
-
-function makeDraggableFloat(handle: HTMLElement, box: Box, target: HTMLElement): void {
-  handle.addEventListener("pointerdown", (e: PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button")) return;
-    e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startBoxX = box.x;
-    const startBoxY = box.y;
-
-    const onMove = (ev: PointerEvent): void => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      target.style.transform = `translate(${dx}px, ${dy}px)`;
-      target.style.opacity = "0.75";
-    };
-
-    const onUp = (ev: PointerEvent): void => {
-      target.style.transform = "";
-      target.style.opacity = "";
-      const newX = startBoxX + (ev.clientX - startX);
-      const newY = startBoxY + (ev.clientY - startY);
-      if (newX !== startBoxX || newY !== startBoxY) {
-        const op = mkMoveBox(box, newX, newY);
-        const result = recordOn(root, worldId, op);
-        root = result.root;
-        worldId = result.worldId;
-      }
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
-      handle.removeEventListener("pointercancel", onCancel);
-    };
-
-    const onCancel = (): void => {
-      target.style.transform = "";
-      target.style.opacity = "";
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onCancel);
