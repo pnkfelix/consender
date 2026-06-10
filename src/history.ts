@@ -287,6 +287,10 @@ export function applyOp(
         child.parent = group;
         group.children.push(child);
       }
+      if (op.groupText !== undefined) {
+        world.text = op.worldNewText ?? world.text;
+        group.text = op.groupText;
+      }
       world.children = world.children.filter(c => !op.childIds.includes(c.id));
       world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, group);
       return { root, worldId };
@@ -311,6 +315,9 @@ export function applyOp(
         child.y = r.prevPos.y;
         child.parent = world;
         world.children.splice(r.index, 0, child);
+      }
+      if (op.worldPrevText !== undefined) {
+        world.text = op.worldPrevText;
       }
       let newWorldId = worldId;
       if (worldId === op.groupId) newWorldId = op.worldId;
@@ -500,7 +507,7 @@ export function mkSetBoxText(box: Box, newText: string): Op {
 // BAR_H must match .box-window-bar min-height in CSS
 const BAR_H = 44;
 
-export function mkGroupBoxes(world: Box, toGroup: Box[]): Op {
+export function mkGroupBoxes(world: Box, toGroup: Box[], groupText = "", worldNewText = world.text): Op {
   const PADDING = 20;
   const minX = Math.min(...toGroup.map(b => b.x));
   const minY = Math.min(...toGroup.map(b => b.y));
@@ -535,5 +542,8 @@ export function mkGroupBoxes(world: Box, toGroup: Box[]): Op {
     groupW,
     groupH,
     groupInsertIndex: Math.min(...childIndices),
+    worldPrevText: world.text,
+    worldNewText,
+    groupText,
   };
 }
