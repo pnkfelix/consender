@@ -500,17 +500,27 @@ export function mkSetBoxText(box: Box, newText: string): Op {
 // BAR_H must match .box-window-bar min-height in CSS
 const BAR_H = 44;
 
-export function mkGroupBoxes(world: Box, toGroup: Box[]): Op {
+export function mkGroupBoxes(world: Box, toGroup: Box[], fallbackCenter?: { x: number; y: number }): Op {
   const PADDING = 20;
-  const minX = Math.min(...toGroup.map(b => b.x));
-  const minY = Math.min(...toGroup.map(b => b.y));
-  const maxX = Math.max(...toGroup.map(b => b.x + (b.display === "window" ? b.w : 120)));
-  const maxY = Math.max(...toGroup.map(b => b.y + (b.display === "window" ? b.h : 44)));
+  let groupX: number, groupY: number, groupW: number, groupH: number;
 
-  const groupX = minX - PADDING;
-  const groupY = minY - PADDING - BAR_H;
-  const groupW = Math.max(180, maxX - minX + 2 * PADDING);
-  const groupH = Math.max(130, BAR_H + maxY - minY + 2 * PADDING);
+  if (toGroup.length > 0) {
+    const minX = Math.min(...toGroup.map(b => b.x));
+    const minY = Math.min(...toGroup.map(b => b.y));
+    const maxX = Math.max(...toGroup.map(b => b.x + (b.display === "window" ? b.w : 120)));
+    const maxY = Math.max(...toGroup.map(b => b.y + (b.display === "window" ? b.h : 44)));
+    groupX = minX - PADDING;
+    groupY = minY - PADDING - BAR_H;
+    groupW = Math.max(180, maxX - minX + 2 * PADDING);
+    groupH = Math.max(130, BAR_H + maxY - minY + 2 * PADDING);
+  } else {
+    groupW = 180;
+    groupH = BAR_H + 130;
+    const cx = fallbackCenter?.x ?? PADDING + groupW / 2;
+    const cy = fallbackCenter?.y ?? PADDING + groupH / 2;
+    groupX = cx - groupW / 2;
+    groupY = cy - groupH / 2;
+  }
 
   const groupId = freshId();
   const childIds = toGroup.map(b => b.id);
@@ -534,6 +544,6 @@ export function mkGroupBoxes(world: Box, toGroup: Box[]): Op {
     groupY,
     groupW,
     groupH,
-    groupInsertIndex: Math.min(...childIndices),
+    groupInsertIndex: childIndices.length > 0 ? Math.min(...childIndices) : world.children.length,
   };
 }
