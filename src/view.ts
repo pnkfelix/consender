@@ -118,12 +118,6 @@ function buildWorld(box: Box): HTMLElement {
   };
   bar.appendChild(redoBtn);
 
-  const textBtn = document.createElement("button");
-  textBtn.title = "edit text";
-  textBtn.textContent = "T";
-  if (box.text) textBtn.classList.add("box-btn-has-text");
-  bar.appendChild(textBtn);
-
   el.appendChild(bar);
 
   const content = document.createElement("div");
@@ -140,40 +134,6 @@ function buildWorld(box: Box): HTMLElement {
     );
   }
   el.appendChild(content);
-
-  textBtn.onclick = () => {
-    const existing = content.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
-    if (existing) { existing.focus(); return; }
-    content.innerHTML = "";
-
-    const ta = document.createElement("textarea");
-    ta.className = "box-text-editor";
-    ta.value = box.text;
-    ta.placeholder = "Enter text…";
-
-    const prevText = box.text;
-    let done = false;
-
-    const commit = () => {
-      if (done) return;
-      done = true;
-      if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
-        root = result.root;
-        worldId = result.worldId;
-      }
-      render();
-    };
-
-    ta.addEventListener("blur", commit);
-    ta.addEventListener("keydown", (ke: KeyboardEvent) => {
-      ke.stopPropagation();
-      if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
-    });
-
-    content.appendChild(ta);
-    ta.focus();
-  };
 
   return el;
 }
