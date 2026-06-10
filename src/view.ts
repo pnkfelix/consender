@@ -79,9 +79,6 @@ function buildWorld(box: Box): HTMLElement {
   outBtn.textContent = "zoom out";
   outBtn.onclick = () => {
     if (box.parent) {
-      const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
-      root = result.root;
-      worldId = result.worldId;
       worldId = box.parent.id;
       persist(root, worldId);
       render();
@@ -361,9 +358,9 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       const newX = startBoxX + (ev.clientX - startX);
       const newY = startBoxY + (ev.clientY - startY);
       if (newX !== startBoxX || newY !== startBoxY) {
-        const op = mkMoveBox(box, newX, newY);
         box.x = startBoxX;
         box.y = startBoxY;
+        const op = mkMoveBox(box, newX, newY);
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
@@ -411,9 +408,9 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
       const newW = Math.max(120, startW + (ev.clientX - startX));
       const newH = Math.max(80, startH + (ev.clientY - startY));
       if (newW !== startW || newH !== startH) {
-        const op = mkResizeBox(box, newW, newH);
         box.w = startW;
         box.h = startH;
+        const op = mkResizeBox(box, newW, newH);
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
