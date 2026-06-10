@@ -1,18 +1,59 @@
-import { addChild, removeBox, wrapInParent } from "./model.js";
 import type { Box } from "./model.js";
+import {
+  findBox,
+  loadOrInit,
+  mkAddBox,
+  mkMoveBox,
+  mkRemoveBox,
+  mkRenameBox,
+  mkResizeBox,
+  mkSetDisplay,
+  mkWrapInParent,
+  persist,
+  recordOn,
+  redoBox,
+  undoBox,
+} from "./history.js";
 
 let appEl!: HTMLElement;
-let currentWorld!: Box;
+let root!: Box;
+let worldId!: string;
 
-export function mount(app: HTMLElement, root: Box): void {
+export function mount(app: HTMLElement): void {
   appEl = app;
-  currentWorld = root;
+  const loaded = loadOrInit();
+  root = loaded.root;
+  worldId = loaded.worldId;
   render();
+
+  document.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.ctrlKey && e.key === "z") {
+      e.preventDefault();
+      const world = findBox(root, worldId);
+      if (world) {
+        const result = undoBox(world, root, worldId);
+        root = result.root;
+        worldId = result.worldId;
+        render();
+      }
+    } else if (e.ctrlKey && (e.key === "y" || e.key === "Z")) {
+      e.preventDefault();
+      const world = findBox(root, worldId);
+      if (world) {
+        const result = redoBox(world, root, worldId);
+        root = result.root;
+        worldId = result.worldId;
+        render();
+      }
+    }
+  });
 }
 
 function render(): void {
+  const world = findBox(root, worldId);
+  if (!world) return;
   appEl.innerHTML = "";
-  appEl.appendChild(buildWorld(currentWorld));
+  appEl.appendChild(buildWorld(world));
 }
 
 function buildWorld(box: Box): HTMLElement {
@@ -25,21 +66,58 @@ function buildWorld(box: Box): HTMLElement {
 
   const newBtn = document.createElement("button");
   newBtn.textContent = "+ box";
-  newBtn.onclick = () => { addChild(box); render(); };
+  newBtn.onclick = () => {
+    const op = mkAddBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
   bar.appendChild(newBtn);
 
   const outBtn = document.createElement("button");
   outBtn.textContent = "zoom out";
   outBtn.onclick = () => {
     if (box.parent) {
-      currentWorld = box.parent;
-      box.display = "window";
+      const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+      root = result.root;
+      worldId = result.worldId;
+      worldId = box.parent.id;
+      persist(root, worldId);
+      render();
     } else {
-      currentWorld = wrapInParent(box);
+      const op = mkWrapInParent(box);
+      const result = recordOn(root, worldId, op);
+      root = result.root;
+      worldId = result.worldId;
+      render();
     }
-    render();
   };
   bar.appendChild(outBtn);
+
+  const undoBtn = document.createElement("button");
+  undoBtn.title = "undo";
+  undoBtn.textContent = "↩";
+  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.onclick = () => {
+    const result = undoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(undoBtn);
+
+  const redoBtn = document.createElement("button");
+  redoBtn.title = "redo";
+  redoBtn.textContent = "↪";
+  redoBtn.disabled = box.redoStack.length === 0;
+  redoBtn.onclick = () => {
+    const result = redoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(redoBtn);
 
   el.appendChild(bar);
 
@@ -72,7 +150,11 @@ function buildCrumb(box: Box): HTMLElement {
     span.textContent = ancestor.label;
     if (i < path.length - 1) {
       span.className = "crumb-link";
-      span.onclick = () => { currentWorld = ancestor; render(); };
+      span.onclick = () => {
+        worldId = ancestor.id;
+        persist(root, worldId);
+        render();
+      };
     } else {
       span.className = "crumb-current";
     }
@@ -95,20 +177,56 @@ function buildIcon(box: Box): HTMLElement {
   const expandBtn = document.createElement("button");
   expandBtn.title = "expand";
   expandBtn.textContent = "⬜";
-  expandBtn.onclick = () => { box.display = "window"; render(); };
+  expandBtn.onclick = () => {
+    const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
   el.appendChild(expandBtn);
+
+  const undoBtn = document.createElement("button");
+  undoBtn.title = "undo";
+  undoBtn.textContent = "↩";
+  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.onclick = () => {
+    const result = undoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(undoBtn);
+
+  const redoBtn = document.createElement("button");
+  redoBtn.title = "redo";
+  redoBtn.textContent = "↪";
+  redoBtn.disabled = box.redoStack.length === 0;
+  redoBtn.onclick = () => {
+    const result = redoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(redoBtn);
 
   const delBtn = document.createElement("button");
   delBtn.title = "delete";
   delBtn.textContent = "✕";
-  delBtn.onclick = () => { removeBox(box); render(); };
+  delBtn.onclick = () => {
+    if (!box.parent) return;
+    const op = mkRemoveBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
   el.appendChild(delBtn);
 
   makeDraggable(el, box);
   return el;
 }
 
-const WINDOW_BAR_H = 44; // matches .box-window-bar min-height
+const WINDOW_BAR_H = 44;
 const MIN_BODY_W = 120;
 const MIN_BODY_H = 50;
 
@@ -133,26 +251,71 @@ function buildWindow(box: Box): HTMLElement {
   renameBtn.textContent = "✎";
   renameBtn.onclick = () => {
     const name = window.prompt("Name:", box.label);
-    if (name !== null && name.trim()) { box.label = name.trim(); render(); }
+    if (name !== null && name.trim()) {
+      const result = recordOn(root, worldId, mkRenameBox(box, name.trim()));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    }
   };
   bar.appendChild(renameBtn);
 
   const iconBtn = document.createElement("button");
   iconBtn.title = "minimize";
   iconBtn.textContent = "▪";
-  iconBtn.onclick = () => { box.display = "icon"; render(); };
+  iconBtn.onclick = () => {
+    const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
   bar.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
   fullBtn.title = "zoom in";
   fullBtn.textContent = "⛶";
-  fullBtn.onclick = () => { currentWorld = box; render(); };
+  fullBtn.onclick = () => {
+    worldId = box.id;
+    persist(root, worldId);
+    render();
+  };
   bar.appendChild(fullBtn);
+
+  const undoBtn = document.createElement("button");
+  undoBtn.title = "undo";
+  undoBtn.textContent = "↩";
+  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.onclick = () => {
+    const result = undoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(undoBtn);
+
+  const redoBtn = document.createElement("button");
+  redoBtn.title = "redo";
+  redoBtn.textContent = "↪";
+  redoBtn.disabled = box.redoStack.length === 0;
+  redoBtn.onclick = () => {
+    const result = redoBox(box, root, worldId);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(redoBtn);
 
   const delBtn = document.createElement("button");
   delBtn.title = "delete";
   delBtn.textContent = "✕";
-  delBtn.onclick = () => { removeBox(box); render(); };
+  delBtn.onclick = () => {
+    if (!box.parent) return;
+    const op = mkRemoveBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
   bar.appendChild(delBtn);
 
   el.appendChild(bar);
@@ -194,15 +357,35 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
       target.style.top = `${box.y}px`;
     };
 
-    const cleanup = (): void => {
+    const onUp = (ev: PointerEvent): void => {
+      const newX = startBoxX + (ev.clientX - startX);
+      const newY = startBoxY + (ev.clientY - startY);
+      if (newX !== startBoxX || newY !== startBoxY) {
+        const op = mkMoveBox(box, newX, newY);
+        box.x = startBoxX;
+        box.y = startBoxY;
+        const result = recordOn(root, worldId, op);
+        root = result.root;
+        worldId = result.worldId;
+      }
       handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", cleanup);
-      handle.removeEventListener("pointercancel", cleanup);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
+    };
+
+    const onCancel = (): void => {
+      box.x = startBoxX;
+      box.y = startBoxY;
+      target.style.left = `${box.x}px`;
+      target.style.top = `${box.y}px`;
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
     };
 
     handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", cleanup);
-    handle.addEventListener("pointercancel", cleanup);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onCancel);
   });
 }
 
@@ -224,14 +407,34 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
       el.style.height = `${box.h}px`;
     };
 
-    const cleanup = (): void => {
+    const onUp = (ev: PointerEvent): void => {
+      const newW = Math.max(120, startW + (ev.clientX - startX));
+      const newH = Math.max(80, startH + (ev.clientY - startY));
+      if (newW !== startW || newH !== startH) {
+        const op = mkResizeBox(box, newW, newH);
+        box.w = startW;
+        box.h = startH;
+        const result = recordOn(root, worldId, op);
+        root = result.root;
+        worldId = result.worldId;
+      }
       handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", cleanup);
-      handle.removeEventListener("pointercancel", cleanup);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
+    };
+
+    const onCancel = (): void => {
+      box.w = startW;
+      box.h = startH;
+      el.style.width = `${box.w}px`;
+      el.style.height = `${box.h}px`;
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onCancel);
     };
 
     handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", cleanup);
-    handle.addEventListener("pointercancel", cleanup);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onCancel);
   });
 }
