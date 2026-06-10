@@ -66,29 +66,27 @@ jobs:
 
           mkdir -p combined/preview
           {
-            cat << 'HTMLEOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PR Previews – consender</title>
-<style>
-body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #24292f; }
-h1 { border-bottom: 2px solid #d0d7de; padding-bottom: 0.5rem; }
-ul { list-style: none; padding: 0; }
-li { padding: 0.6rem 0; border-bottom: 1px solid #d0d7de; }
-a { text-decoration: none; color: #0969da; }
-a:hover { text-decoration: underline; }
-.pr-num { color: #57606a; margin-right: 0.4em; }
-.back { font-size: 0.9em; margin-bottom: 1rem; }
-</style>
-</head>
-<body>
-<p class="back"><a href="/consender/">← consender</a></p>
-<h1>PR Previews</h1>
-HTMLEOF
-
+            printf '%s\n' \
+              '<!DOCTYPE html>' \
+              '<html lang="en">' \
+              '<head>' \
+              '<meta charset="UTF-8">' \
+              '<meta name="viewport" content="width=device-width, initial-scale=1.0">' \
+              '<title>PR Previews &#x2013; consender</title>' \
+              '<style>' \
+              'body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #24292f; }' \
+              'h1 { border-bottom: 2px solid #d0d7de; padding-bottom: 0.5rem; }' \
+              'ul { list-style: none; padding: 0; }' \
+              'li { padding: 0.6rem 0; border-bottom: 1px solid #d0d7de; }' \
+              'a { text-decoration: none; color: #0969da; }' \
+              'a:hover { text-decoration: underline; }' \
+              '.pr-num { color: #57606a; margin-right: 0.4em; }' \
+              '.back { font-size: 0.9em; margin-bottom: 1rem; }' \
+              '</style>' \
+              '</head>' \
+              '<body>' \
+              '<p class="back"><a href="/consender/">&#x2190; consender</a></p>' \
+              '<h1>PR Previews</h1>'
             pr_count=$(echo "$prs_json" | jq 'length')
             if [ "$pr_count" -eq 0 ]; then
               echo '<p>No open PRs currently have the <code>preview</code> label.</p>'
@@ -97,9 +95,7 @@ HTMLEOF
               echo "$prs_json" | jq -r '.[] | "<li><a href=\"/consender/preview/pr-\(.number)/\"><span class=\"pr-num\">#\(.number)</span> \(.title | @html)</a></li>"'
               echo '</ul>'
             fi
-
-            echo '</body>'
-            echo '</html>'
+            printf '%s\n' '</body>' '</html>'
           } > combined/preview/index.html
 
       - uses: actions/upload-pages-artifact@v3
