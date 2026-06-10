@@ -626,7 +626,7 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
 
     if (!cancelled && isClosedLasso(points)) {
       const encircled = findEncircledBoxes(world, points);
-      if (encircled.length >= 2) {
+      if (encircled.length >= 1) {
         const op = mkGroupBoxes(world, encircled);
         const result = recordOn(root, worldId, op);
         root = result.root;
