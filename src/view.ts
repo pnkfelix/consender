@@ -134,10 +134,9 @@ function buildWorld(box: Box): HTMLElement {
   }
   makeLassoGesture(content, box);
   if (box.text) {
-    content.insertBefore(
-      buildTextLayer(box, window.innerWidth, window.innerHeight - 48),
-      content.firstChild
-    );
+    const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
+    tl.dataset.worldTextLayer = "1";
+    content.insertBefore(tl, content.firstChild);
   }
   el.appendChild(content);
 
@@ -574,6 +573,40 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
   });
 }
 
+// ---- text migration helpers for lasso gesture ----
+
+function computeTextMigration(
+  content: HTMLElement,
+  polygon: Pt[],
+  worldText: string
+): { groupText: string; worldNewText: string } {
+  if (!worldText) return { groupText: "", worldNewText: "" };
+  const tl = content.querySelector<HTMLElement>("[data-world-text-layer]");
+  if (!tl) return { groupText: "", worldNewText: worldText };
+
+  const contentRect = content.getBoundingClientRect();
+  const allWords = worldText.split(/\s+/).filter(Boolean);
+  const encircledIndices = new Set<number>();
+
+  let wordIdx = 0;
+  for (const span of tl.querySelectorAll<HTMLElement>(".box-text")) {
+    const spanWords = (span.textContent ?? "").split(/\s+/).filter(Boolean);
+    const spanStart = wordIdx;
+    wordIdx += spanWords.length;
+    const r = span.getBoundingClientRect();
+    const cx = r.left - contentRect.left + r.width / 2;
+    const cy = r.top - contentRect.top + r.height / 2;
+    if (pointInPolygon(cx, cy, polygon)) {
+      for (let i = spanStart; i < spanStart + spanWords.length; i++) encircledIndices.add(i);
+    }
+  }
+
+  return {
+    groupText: allWords.filter((_, i) => encircledIndices.has(i)).join(" "),
+    worldNewText: allWords.filter((_, i) => !encircledIndices.has(i)).join(" "),
+  };
+}
+
 // ---- lasso gesture: draw a closed loop to group encircled boxes ----
 
 type Pt = { x: number; y: number };
@@ -627,7 +660,8 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     if (!cancelled && isClosedLasso(points)) {
       const encircled = findEncircledBoxes(world, points);
       if (encircled.length >= 2) {
-        const op = mkGroupBoxes(world, encircled);
+        const { groupText, worldNewText } = computeTextMigration(content, points, world.text);
+        const op = mkGroupBoxes(world, encircled, groupText, worldNewText);
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
