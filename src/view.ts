@@ -381,50 +381,36 @@ function buildWindow(box: Box): HTMLElement {
   }
 
   textBtn.onclick = () => {
-    const existing = body.querySelector(".box-text-editor") as HTMLElement | null;
-    if (existing) { (existing.querySelector("textarea") as HTMLTextAreaElement | null)?.focus(); return; }
+    const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
+    if (existing) { existing.focus(); return; }
     body.innerHTML = "";
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "box-text-editor";
-    wrapper.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;";
-
     const ta = document.createElement("textarea");
+    ta.className = "box-text-editor";
     ta.value = box.text;
     ta.placeholder = "Enter text…";
-    ta.style.cssText = "flex:1;resize:none;font:inherit;font-size:13px;border:none;outline:none;padding:6px;background:#fffff8;color:var(--ink);line-height:1.55;";
 
-    const btnBar = document.createElement("div");
-    btnBar.style.cssText = "display:flex;gap:4px;padding:4px;background:var(--chrome);border-top:1px solid var(--border);flex-shrink:0;";
+    const prevText = box.text;
+    let done = false;
 
-    const makeEditorBtn = (label: string): HTMLButtonElement => {
-      const b = document.createElement("button");
-      b.textContent = label;
-      b.style.cssText = "flex:1;font:inherit;font-size:13px;padding:4px 0;cursor:pointer;border:1px solid #999;background:var(--bg);border-radius:3px;";
-      btnBar.appendChild(b);
-      return b;
-    };
-
-    makeEditorBtn("Save").onclick = () => {
-      const newText = ta.value;
-      if (newText !== box.text) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, newText));
+    const commit = () => {
+      if (done) return;
+      done = true;
+      if (ta.value !== prevText) {
+        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
         root = result.root;
         worldId = result.worldId;
-      } else {
-        render();
       }
+      render();
     };
-    makeEditorBtn("Cancel").onclick = () => render();
 
+    ta.addEventListener("blur", commit);
     ta.addEventListener("keydown", (ke: KeyboardEvent) => {
       ke.stopPropagation();
-      if (ke.key === "Escape") { ke.preventDefault(); render(); }
+      if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
     });
 
-    wrapper.appendChild(ta);
-    wrapper.appendChild(btnBar);
-    body.appendChild(wrapper);
+    body.appendChild(ta);
     ta.focus();
   };
 
