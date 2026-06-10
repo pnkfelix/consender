@@ -1,5 +1,6 @@
 import type { Box } from "./model.js";
 import {
+  canUndo,
   findBox,
   loadOrInit,
   mkAddBox,
@@ -97,7 +98,7 @@ function buildWorld(box: Box): HTMLElement {
   const undoBtn = document.createElement("button");
   undoBtn.title = "undo";
   undoBtn.textContent = "↩";
-  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.disabled = !canUndo(box, root);
   undoBtn.onclick = () => {
     const result = undoBox(box, root, worldId);
     root = result.root;
@@ -370,7 +371,7 @@ function buildWindow(box: Box): HTMLElement {
   const undoBtn = document.createElement("button");
   undoBtn.title = "undo";
   undoBtn.textContent = "↩";
-  undoBtn.disabled = box.undoStack.length === 0;
+  undoBtn.disabled = !canUndo(box, root);
   undoBtn.onclick = () => {
     const result = undoBox(box, root, worldId);
     root = result.root;
