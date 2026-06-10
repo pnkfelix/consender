@@ -165,6 +165,10 @@ export function invertOp(op: Op): Op {
       return { ...op, kind: "UngroupBoxes" };
     case "UngroupBoxes":
       return { ...op, kind: "GroupBoxes" };
+    case "CollapseBox":
+      return { ...op, kind: "UncollapseBox" };
+    case "UncollapseBox":
+      return { ...op, kind: "CollapseBox" };
   }
 }
 
@@ -323,6 +327,58 @@ export function applyOp(
       if (worldId === op.groupId) newWorldId = op.worldId;
       return { root, worldId: newWorldId };
     }
+    case "CollapseBox": {
+      const parent = findBox(root, op.parentId);
+      const box = findBox(root, op.boxId);
+      if (!parent || !box) return { root, worldId };
+      parent.children.splice(op.boxIndex, 1);
+      for (let i = 0; i < op.childIds.length; i++) {
+        const child = box.children.find(c => c.id === op.childIds[i]);
+        if (!child) continue;
+        const newPos = op.newPositions.find(p => p.id === child.id)!;
+        child.x = newPos.x;
+        child.y = newPos.y;
+        child.parent = parent;
+        parent.children.splice(op.boxIndex + i, 0, child);
+      }
+      parent.text = op.parentNewText;
+      let newWorldId = worldId;
+      if (worldId === op.boxId) newWorldId = op.parentId;
+      return { root, worldId: newWorldId };
+    }
+    case "UncollapseBox": {
+      const parent = findBox(root, op.parentId);
+      if (!parent) return { root, worldId };
+      const childrenToMove = op.childIds
+        .map(id => parent.children.find(c => c.id === id))
+        .filter((c): c is Box => c !== undefined);
+      parent.children = parent.children.filter(c => !op.childIds.includes(c.id));
+      const sBox = op.subtree.boxes[op.boxId];
+      const box: Box = {
+        id: sBox.id,
+        label: sBox.label,
+        display: sBox.display,
+        children: [],
+        parent: parent,
+        x: sBox.x,
+        y: sBox.y,
+        w: sBox.w,
+        h: sBox.h,
+        text: sBox.text ?? "",
+        undoStack: [],
+        redoStack: [],
+      };
+      for (const child of childrenToMove) {
+        const prevPos = op.prevPositions.find(p => p.id === child.id)!;
+        child.x = prevPos.x;
+        child.y = prevPos.y;
+        child.parent = box;
+        box.children.push(child);
+      }
+      parent.children.splice(op.boxIndex, 0, box);
+      parent.text = op.parentPrevText;
+      return { root, worldId };
+    }
   }
 }
 
@@ -343,6 +399,9 @@ function stackBoxId(op: Op): string {
     case "GroupBoxes":
     case "UngroupBoxes":
       return op.worldId;
+    case "CollapseBox":
+    case "UncollapseBox":
+      return op.parentId;
   }
 }
 
@@ -486,6 +545,34 @@ export function mkRemoveBox(box: Box): Op {
     parentId: box.parent.id,
     index,
     subtree: serializeOpSubtree(box),
+  };
+}
+
+export function mkCollapseBox(box: Box): Op {
+  if (!box.parent) throw new Error("Cannot collapse root box");
+  const parent = box.parent;
+  const boxIndex = parent.children.indexOf(box);
+  const childIds = box.children.map(c => c.id);
+  const prevPositions: PositionRecord[] = box.children.map(c => ({ id: c.id, x: c.x, y: c.y }));
+  const newPositions: PositionRecord[] = box.children.map(c => ({
+    id: c.id,
+    x: box.x + c.x,
+    y: box.y + BAR_H + c.y,
+  }));
+  const parentNewText = box.text
+    ? (parent.text ? parent.text + " " + box.text : box.text)
+    : parent.text;
+  return {
+    kind: "CollapseBox",
+    boxId: box.id,
+    parentId: parent.id,
+    boxIndex,
+    subtree: serializeOpSubtree(box),
+    childIds,
+    prevPositions,
+    newPositions,
+    parentPrevText: parent.text,
+    parentNewText,
   };
 }
 
