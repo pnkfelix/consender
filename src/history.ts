@@ -323,13 +323,15 @@ export function applyOp(
   }
 }
 
-function stackBoxId(op: Op): string {
+function stackBoxId(op: Op, root: Box): string | null {
   switch (op.kind) {
     case "MoveBox":
     case "ResizeBox":
     case "RenameBox":
-    case "SetBoxText":
+      return findBox(root, op.id)?.parent?.id ?? op.id;
     case "SetDisplay":
+      return null;
+    case "SetBoxText":
       return op.id;
     case "AddBox":
     case "RemoveBox":
@@ -377,11 +379,13 @@ export function recordOn(
   op: Op
 ): { root: Box; worldId: string } {
   const result = applyOp(root, worldId, op);
-  const stackId = stackBoxId(op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.undoStack.push({ op, guard: guardForOp(op) });
-    stackBox.redoStack = [];
+  const stackId = stackBoxId(op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.undoStack.push({ op, guard: guardForOp(op) });
+      stackBox.redoStack = [];
+    }
   }
   persist(result.root, result.worldId);
   return result;
@@ -397,10 +401,12 @@ export function undoBox(
   if (entry.guard && !evaluateGuard(entry.guard, root)) return { root, worldId };
   box.undoStack.pop();
   const result = applyOp(root, worldId, invertOp(entry.op));
-  const stackId = stackBoxId(entry.op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.redoStack.push(entry);
+  const stackId = stackBoxId(entry.op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.redoStack.push(entry);
+    }
   }
   persist(result.root, result.worldId);
   return result;
@@ -414,10 +420,12 @@ export function redoBox(
   const entry = box.redoStack.pop();
   if (!entry) return { root, worldId };
   const result = applyOp(root, worldId, entry.op);
-  const stackId = stackBoxId(entry.op);
-  const stackBox = findBox(result.root, stackId);
-  if (stackBox) {
-    stackBox.undoStack.push(entry);
+  const stackId = stackBoxId(entry.op, result.root);
+  if (stackId !== null) {
+    const stackBox = findBox(result.root, stackId);
+    if (stackBox) {
+      stackBox.undoStack.push(entry);
+    }
   }
   persist(result.root, result.worldId);
   return result;
