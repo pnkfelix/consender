@@ -8,6 +8,7 @@ import {
   mkRemoveBox,
   mkRenameBox,
   mkResizeBox,
+  mkSetBoxText,
   mkSetDisplay,
   mkWrapInParent,
   persist,
@@ -126,6 +127,12 @@ function buildWorld(box: Box): HTMLElement {
     content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
   }
   makeLassoGesture(content, box);
+  if (box.text) {
+    content.insertBefore(
+      buildTextLayer(box, window.innerWidth, window.innerHeight - 48),
+      content.firstChild
+    );
+  }
   el.appendChild(content);
 
   return el;
@@ -192,6 +199,82 @@ function buildIcon(box: Box): HTMLElement {
 const WINDOW_BAR_H = 44;
 const MIN_BODY_W = 120;
 const MIN_BODY_H = 50;
+const BODY_PAD = 6;
+const TEXT_SIZE = 13;
+const LINE_H = Math.ceil(TEXT_SIZE * 1.55);
+
+// Returns horizontal free spans [start, end] at a given text-line band,
+// after subtracting the footprints of all child boxes (plus a small gap).
+function freeSpans(
+  lineY: number,
+  minX: number, maxX: number,
+  regions: Array<{ x: number; y: number; w: number; h: number }>
+): Array<[number, number]> {
+  const GAP = 4;
+  let spans: Array<[number, number]> = [[minX, maxX]];
+  for (const r of regions) {
+    if (r.y + r.h <= lineY || r.y >= lineY + LINE_H) continue;
+    const rx = r.x - GAP, re = r.x + r.w + GAP;
+    const next: Array<[number, number]> = [];
+    for (const [sx, ex] of spans) {
+      if (re <= sx || rx >= ex) { next.push([sx, ex]); continue; }
+      if (sx < rx) next.push([sx, rx]);
+      if (re < ex) next.push([re, ex]);
+    }
+    spans = next;
+  }
+  return spans;
+}
+
+// Builds the text overlay layer for a box that has text content.
+// Child boxes keep their absolute positions; text fills the gaps.
+// bodyW/bodyH default to the box's own stored size; pass larger values for fullscreen.
+function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): HTMLElement {
+  const layer = document.createElement("div");
+  layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
+
+  // Use canvas for accurate monospace glyph measurement.
+  const cvs = document.createElement("canvas");
+  const ctx = cvs.getContext("2d");
+  if (!ctx) return layer;
+  ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
+
+  const regions = box.children.map(c => ({
+    x: c.x,
+    y: c.y,
+    w: c.display === "window" ? c.w : Math.max(80, ctx.measureText(c.label).width + 68),
+    h: c.display === "window" ? c.h : 44,
+  }));
+
+  const words = box.text.split(/\s+/).filter(Boolean);
+  let wi = 0;
+
+  for (let y = BODY_PAD; wi < words.length && y + LINE_H <= bodyH - BODY_PAD; y += LINE_H) {
+    const spans = freeSpans(y, BODY_PAD, bodyW - BODY_PAD, regions);
+    for (const [sx, ex] of spans) {
+      const avail = ex - sx;
+      if (avail < TEXT_SIZE * 2) continue;
+      const lineWords: string[] = [];
+      let lineW = 0;
+      while (wi < words.length) {
+        const sep = lineWords.length > 0 ? " " : "";
+        const cw = ctx.measureText(sep + words[wi]).width;
+        if (lineWords.length > 0 && lineW + cw > avail) break;
+        lineWords.push(words[wi++]);
+        lineW += cw;
+      }
+      if (lineWords.length > 0) {
+        const s = document.createElement("span");
+        s.className = "box-text";
+        s.style.cssText = `position:absolute;left:${sx}px;top:${y}px;white-space:nowrap;`;
+        s.textContent = lineWords.join(" ");
+        layer.appendChild(s);
+      }
+    }
+  }
+
+  return layer;
+}
 
 function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
@@ -268,6 +351,12 @@ function buildWindow(box: Box): HTMLElement {
   };
   bar.appendChild(redoBtn);
 
+  const textBtn = document.createElement("button");
+  textBtn.title = "edit text";
+  textBtn.textContent = "T";
+  if (box.text) textBtn.classList.add("box-btn-has-text");
+  bar.appendChild(textBtn);
+
   const delBtn = document.createElement("button");
   delBtn.title = "delete";
   delBtn.textContent = "✕";
@@ -286,9 +375,50 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
   const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
+
+  // Child boxes always use absolute positioning — unchanged from text-free behavior.
+  // The text layer (when present) is inserted first so it paints behind the boxes.
   for (const child of box.children) {
-    body.appendChild(tooSmall || child.display === "icon" ? buildIcon(child) : buildWindow(child));
+    body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
   }
+  if (box.text) {
+    body.insertBefore(buildTextLayer(box), body.firstChild);
+  }
+
+  textBtn.onclick = () => {
+    const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
+    if (existing) { existing.focus(); return; }
+    body.innerHTML = "";
+
+    const ta = document.createElement("textarea");
+    ta.className = "box-text-editor";
+    ta.value = box.text;
+    ta.placeholder = "Enter text…";
+
+    const prevText = box.text;
+    let done = false;
+
+    const commit = () => {
+      if (done) return;
+      done = true;
+      if (ta.value !== prevText) {
+        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
+        root = result.root;
+        worldId = result.worldId;
+      }
+      render();
+    };
+
+    ta.addEventListener("blur", commit);
+    ta.addEventListener("keydown", (ke: KeyboardEvent) => {
+      ke.stopPropagation();
+      if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
+    });
+
+    body.appendChild(ta);
+    ta.focus();
+  };
+
   el.appendChild(body);
 
   const resizeHandle = document.createElement("div");
@@ -330,6 +460,7 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
+        render();
       }
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
@@ -380,6 +511,7 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
+        render();
       }
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
