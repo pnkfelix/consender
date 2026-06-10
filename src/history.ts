@@ -4,7 +4,7 @@ import {
   getNextId,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Op, OpSubtree, SerializedBox } from "./model.js";
+import type { Box, DisplayMode, Op, OpSubtree, PositionRecord, SerializedBox } from "./model.js";
 
 export type { Op, OpSubtree, SerializedBox };
 
@@ -155,6 +155,10 @@ export function invertOp(op: Op): Op {
       return { kind: "UnwrapFromParent", wrapperId: op.wrapperId, childId: op.childId, prevX: op.prevX, prevY: op.prevY };
     case "UnwrapFromParent":
       return { kind: "WrapInParent", wrapperId: op.wrapperId, childId: op.childId, prevX: op.prevX, prevY: op.prevY };
+    case "GroupBoxes":
+      return { ...op, kind: "UngroupBoxes" };
+    case "UngroupBoxes":
+      return { ...op, kind: "GroupBoxes" };
   }
 }
 
@@ -244,6 +248,61 @@ export function applyOp(
       }
       return { root: child, worldId: newWorldId };
     }
+    case "GroupBoxes": {
+      const world = findBox(root, op.worldId);
+      if (!world) return { root, worldId };
+      const childMap = new Map(world.children.map(c => [c.id, c]));
+      const toGroup = op.childIds.map(id => childMap.get(id)).filter((b): b is Box => b !== undefined);
+      if (toGroup.length !== op.childIds.length) return { root, worldId };
+      const group: Box = {
+        id: op.groupId,
+        label: "group",
+        display: "window",
+        children: [],
+        parent: world,
+        x: op.groupX,
+        y: op.groupY,
+        w: op.groupW,
+        h: op.groupH,
+        undoStack: [],
+        redoStack: [],
+      };
+      for (const child of toGroup) {
+        const newPos = op.newPositions.find(p => p.id === child.id)!;
+        child.x = newPos.x;
+        child.y = newPos.y;
+        child.parent = group;
+        group.children.push(child);
+      }
+      world.children = world.children.filter(c => !op.childIds.includes(c.id));
+      world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, group);
+      return { root, worldId };
+    }
+    case "UngroupBoxes": {
+      const world = findBox(root, op.worldId);
+      if (!world) return { root, worldId };
+      const groupIdx = world.children.findIndex(c => c.id === op.groupId);
+      if (groupIdx === -1) return { root, worldId };
+      const [group] = world.children.splice(groupIdx, 1);
+      const restorations = op.childIds
+        .map((id, i) => ({
+          id,
+          index: op.childIndices[i],
+          prevPos: op.prevPositions.find(p => p.id === id)!,
+        }))
+        .sort((a, b) => a.index - b.index);
+      for (const r of restorations) {
+        const child = group.children.find(c => c.id === r.id);
+        if (!child) continue;
+        child.x = r.prevPos.x;
+        child.y = r.prevPos.y;
+        child.parent = world;
+        world.children.splice(r.index, 0, child);
+      }
+      let newWorldId = worldId;
+      if (worldId === op.groupId) newWorldId = op.worldId;
+      return { root, worldId: newWorldId };
+    }
   }
 }
 
@@ -260,6 +319,9 @@ function stackBoxId(op: Op): string {
     case "WrapInParent":
     case "UnwrapFromParent":
       return op.childId;
+    case "GroupBoxes":
+    case "UngroupBoxes":
+      return op.worldId;
   }
 }
 
@@ -414,5 +476,46 @@ export function mkWrapInParent(box: Box): Op {
     childId: box.id,
     prevX: box.x,
     prevY: box.y,
+  };
+}
+
+// BAR_H must match .box-window-bar min-height in CSS
+const BAR_H = 44;
+
+export function mkGroupBoxes(world: Box, toGroup: Box[]): Op {
+  const PADDING = 20;
+  const minX = Math.min(...toGroup.map(b => b.x));
+  const minY = Math.min(...toGroup.map(b => b.y));
+  const maxX = Math.max(...toGroup.map(b => b.x + (b.display === "window" ? b.w : 120)));
+  const maxY = Math.max(...toGroup.map(b => b.y + (b.display === "window" ? b.h : 44)));
+
+  const groupX = minX - PADDING;
+  const groupY = minY - PADDING - BAR_H;
+  const groupW = Math.max(180, maxX - minX + 2 * PADDING);
+  const groupH = Math.max(130, BAR_H + maxY - minY + 2 * PADDING);
+
+  const groupId = freshId();
+  const childIds = toGroup.map(b => b.id);
+  const childIndices = toGroup.map(b => world.children.indexOf(b));
+  const prevPositions: PositionRecord[] = toGroup.map(b => ({ id: b.id, x: b.x, y: b.y }));
+  const newPositions: PositionRecord[] = toGroup.map(b => ({
+    id: b.id,
+    x: b.x - groupX,
+    y: b.y - groupY - BAR_H,
+  }));
+
+  return {
+    kind: "GroupBoxes",
+    worldId: world.id,
+    groupId,
+    childIds,
+    childIndices,
+    prevPositions,
+    newPositions,
+    groupX,
+    groupY,
+    groupW,
+    groupH,
+    groupInsertIndex: Math.min(...childIndices),
   };
 }
