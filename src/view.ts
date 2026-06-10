@@ -3,6 +3,7 @@ import {
   findBox,
   loadOrInit,
   mkAddBox,
+  mkGroupBoxes,
   mkMoveBox,
   mkRemoveBox,
   mkRenameBox,
@@ -120,9 +121,11 @@ function buildWorld(box: Box): HTMLElement {
 
   const content = document.createElement("div");
   content.className = "box-content";
+  content.style.touchAction = "none";
   for (const child of box.children) {
     content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
   }
+  makeLassoGesture(content, box);
   el.appendChild(content);
 
   return el;
@@ -434,4 +437,122 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
     handle.addEventListener("pointerup", onUp);
     handle.addEventListener("pointercancel", onCancel);
   });
+}
+
+// ---- lasso gesture: draw a closed loop to group encircled boxes ----
+
+type Pt = { x: number; y: number };
+
+function makeLassoGesture(content: HTMLElement, world: Box): void {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden;z-index:1000;";
+  content.appendChild(svg);
+
+  const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pathEl.setAttribute("fill", "rgba(80,130,255,0.1)");
+  pathEl.setAttribute("stroke", "rgba(80,130,255,0.75)");
+  pathEl.setAttribute("stroke-width", "2");
+  pathEl.setAttribute("stroke-dasharray", "6 3");
+  pathEl.setAttribute("stroke-linecap", "round");
+  svg.appendChild(pathEl);
+
+  let activePtId: number | null = null;
+  let points: Pt[] = [];
+  let cancelled = false;
+
+  content.addEventListener("pointerdown", (e: PointerEvent) => {
+    if (activePtId !== null) return;
+    if ((e.target as HTMLElement) !== content) return;
+    e.preventDefault();
+    content.setPointerCapture(e.pointerId);
+    activePtId = e.pointerId;
+    cancelled = false;
+    const rect = content.getBoundingClientRect();
+    points = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
+    setPath(pathEl, points, false);
+  });
+
+  content.addEventListener("pointermove", (e: PointerEvent) => {
+    if (activePtId !== e.pointerId) return;
+    const rect = content.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) cancelled = true;
+    points.push({ x, y });
+    setPath(pathEl, points, false);
+  });
+
+  content.addEventListener("pointerup", (e: PointerEvent) => {
+    if (activePtId !== e.pointerId) return;
+    activePtId = null;
+    const rect = content.getBoundingClientRect();
+    points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+
+    if (!cancelled && isClosedLasso(points)) {
+      const encircled = findEncircledBoxes(world, points);
+      if (encircled.length >= 2) {
+        const op = mkGroupBoxes(world, encircled);
+        const result = recordOn(root, worldId, op);
+        root = result.root;
+        worldId = result.worldId;
+        render();
+        return;
+      }
+    }
+
+    points = [];
+    setPath(pathEl, points, false);
+  });
+
+  content.addEventListener("pointercancel", (e: PointerEvent) => {
+    if (activePtId !== e.pointerId) return;
+    activePtId = null;
+    points = [];
+    setPath(pathEl, points, false);
+  });
+}
+
+function setPath(pathEl: SVGPathElement, points: Pt[], close: boolean): void {
+  if (points.length < 2) { pathEl.setAttribute("d", ""); return; }
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    d += ` L ${points[i].x} ${points[i].y}`;
+  }
+  if (close) d += " Z";
+  pathEl.setAttribute("d", d);
+}
+
+function isClosedLasso(points: Pt[]): boolean {
+  if (points.length < 10) return false;
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  if (len < 150) return false;
+  const dx = points[points.length - 1].x - points[0].x;
+  const dy = points[points.length - 1].y - points[0].y;
+  return Math.sqrt(dx * dx + dy * dy) < 60;
+}
+
+function findEncircledBoxes(world: Box, polygon: Pt[]): Box[] {
+  return world.children.filter(child => {
+    const cx = child.x + (child.display === "window" ? child.w / 2 : 60);
+    const cy = child.y + (child.display === "window" ? child.h / 2 : 22);
+    return pointInPolygon(cx, cy, polygon);
+  });
+}
+
+function pointInPolygon(x: number, y: number, polygon: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }

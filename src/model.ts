@@ -1,5 +1,7 @@
 export type DisplayMode = "icon" | "window";
 
+export interface PositionRecord { id: string; x: number; y: number }
+
 export type Op =
   | { kind: "MoveBox";          id: string; x: number; y: number; prevX: number; prevY: number }
   | { kind: "ResizeBox";        id: string; w: number; h: number; prevW: number; prevH: number }
@@ -8,7 +10,19 @@ export type Op =
   | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
   | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
   | { kind: "WrapInParent";     wrapperId: string; childId: string; prevX: number; prevY: number }
-  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; prevX: number; prevY: number };
+  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; prevX: number; prevY: number }
+  | { kind: "GroupBoxes";
+      worldId: string; groupId: string;
+      childIds: string[]; childIndices: number[];
+      prevPositions: PositionRecord[]; newPositions: PositionRecord[];
+      groupX: number; groupY: number; groupW: number; groupH: number;
+      groupInsertIndex: number }
+  | { kind: "UngroupBoxes";
+      worldId: string; groupId: string;
+      childIds: string[]; childIndices: number[];
+      prevPositions: PositionRecord[]; newPositions: PositionRecord[];
+      groupX: number; groupY: number; groupW: number; groupH: number;
+      groupInsertIndex: number };
 
 export interface OpSubtree {
   rootId: string;
