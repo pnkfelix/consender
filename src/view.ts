@@ -285,23 +285,28 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
     h: c.display === "window" ? c.h : 44,
   }));
 
-  const words = box.text.split(/\s+/).filter(Boolean);
-  let wi = 0;
+  // Split into paragraphs on newlines; each paragraph word-wraps independently.
+  const paraWords = box.text.replace(/\r\n|\r/g, "\n").split("\n").map(p => p.split(/\s+/).filter(Boolean));
+  let pIdx = 0;
+  let wIdx = 0;
 
-  for (let y = BODY_PAD; wi < words.length && y + LINE_H <= bodyH - BODY_PAD; y += LINE_H) {
+  for (let y = BODY_PAD; pIdx < paraWords.length && y + LINE_H <= bodyH - BODY_PAD; y += LINE_H) {
+    if (paraWords[pIdx].length === 0) { pIdx++; continue; }
     const spans = freeSpans(y, BODY_PAD, bodyW - BODY_PAD, regions);
     for (const [sx, ex] of spans) {
       const avail = ex - sx;
       if (avail < TEXT_SIZE * 2) continue;
       const lineWords: string[] = [];
       let lineW = 0;
-      while (wi < words.length) {
+      while (wIdx < paraWords[pIdx].length) {
         const sep = lineWords.length > 0 ? " " : "";
-        const cw = ctx.measureText(sep + words[wi]).width;
+        const cw = ctx.measureText(sep + paraWords[pIdx][wIdx]).width;
         if (lineWords.length > 0 && lineW + cw > avail) break;
-        lineWords.push(words[wi++]);
+        lineWords.push(paraWords[pIdx][wIdx++]);
         lineW += cw;
       }
+      const endOfParagraph = wIdx >= paraWords[pIdx].length;
+      if (endOfParagraph) { pIdx++; wIdx = 0; }
       if (lineWords.length > 0) {
         const s = document.createElement("span");
         s.className = "box-text";
@@ -309,6 +314,7 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
         s.textContent = lineWords.join(" ");
         layer.appendChild(s);
       }
+      if (endOfParagraph || pIdx >= paraWords.length) break;
     }
   }
 
