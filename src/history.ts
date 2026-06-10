@@ -8,7 +8,31 @@ import type { Box, DisplayMode, Op, OpSubtree, PositionRecord, SerializedBox } f
 
 export type { Op, OpSubtree, SerializedBox };
 
-const STORAGE_KEY = "consender-state";
+// Mainline key is stable for backward compatibility with existing stored data.
+const MAINLINE_KEY = "consender-state";
+
+// Each deployment (mainline vs. each preview PR) gets its own storage slot so
+// that preview-only op kinds in undo stacks can't corrupt other deployments.
+// import.meta.env.BASE_URL is a Vite compile-time constant:
+//   mainline  → "/consender/"
+//   preview   → "/consender/preview/pr-123/"
+function storageKey(): string {
+  const base = import.meta.env.BASE_URL;
+  return base === "/consender/" ? MAINLINE_KEY : `consender-state:${base}`;
+}
+
+function tryLoadFromKey(key: string): { root: Box; worldId: string } | null {
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const state = JSON.parse(raw) as PersistedState;
+    setNextId(state.nextId);
+    return { root: deserializeFullTree(state.tree), worldId: state.worldId };
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
 
 interface PersistedSerializedBox extends SerializedBox {
   undoStack: Op[];
@@ -402,21 +426,25 @@ export function persist(root: Box, worldId: string): void {
     worldId,
     nextId: getNextId(),
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(storageKey(), JSON.stringify(state));
 }
 
 export function loadOrInit(): { root: Box; worldId: string } {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
-      const state = JSON.parse(raw) as PersistedState;
-      setNextId(state.nextId);
-      const root = deserializeFullTree(state.tree);
-      return { root, worldId: state.worldId };
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
+  const key = storageKey();
+  const loaded = tryLoadFromKey(key);
+  if (loaded) return loaded;
+
+  if (key !== MAINLINE_KEY) {
+    // First visit to this preview: seed from mainline so the user starts from
+    // their real state rather than a blank canvas.  Persist immediately to
+    // claim the preview key; future mutations stay isolated from mainline.
+    const seeded = tryLoadFromKey(MAINLINE_KEY);
+    if (seeded) {
+      persist(seeded.root, seeded.worldId);
+      return seeded;
     }
   }
+
   const root = createRoot();
   return { root, worldId: root.id };
 }
