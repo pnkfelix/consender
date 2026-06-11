@@ -34,12 +34,11 @@ const helpMap: Record<string, string> = {
     "Place inside a parent to configure all its children. Walks up the tree if not found.",
 };
 
-// A box's toolbarPolicy comes from its own children first, then ancestor children
-// (inheriting up the chain), but never crossing into the current world box —
-// each sub-window's policy is resolved within its own context.
+// A box's toolbarPolicy comes from its own children first, then ancestor
+// children walking up the chain. Nearer ancestor takes precedence.
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
-  while (cur !== null && cur.id !== worldId) {
+  while (cur !== null) {
     const cfg = cur.children.find(c => c.label === "toolbarPolicy");
     if (cfg) {
       const t = cfg.text.trim().toLowerCase();
