@@ -24,6 +24,10 @@ let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
 let selectedBoxId: string | null = null;
+let helpEl!: HTMLDivElement;
+
+// Map box labels to context-sensitive help text shown in the help bar.
+const helpMap: Record<string, string> = {};
 
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
@@ -34,14 +38,30 @@ function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   return "always";
 }
 
+function updateHelpBar(): void {
+  const selectedBox = selectedBoxId ? findBox(root, selectedBoxId) : null;
+  const world = findBox(root, worldId);
+  const label = selectedBox?.label ?? world?.label;
+  const text = label != null ? helpMap[label] : undefined;
+  helpEl.textContent = text ?? "";
+  helpEl.style.display = text != null ? "block" : "none";
+}
+
 function updateSelection(): void {
   document.querySelectorAll<HTMLElement>(".box-window").forEach(el => {
     el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
   });
+  updateHelpBar();
 }
 
 export function mount(app: HTMLElement): void {
   appEl = app;
+
+  helpEl = document.createElement("div");
+  helpEl.className = "help-bar";
+  helpEl.style.display = "none";
+  document.body.appendChild(helpEl);
+
   const loaded = loadOrInit();
   root = loaded.root;
   worldId = loaded.worldId;
@@ -75,6 +95,7 @@ function render(): void {
   if (!world) return;
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
+  updateHelpBar();
 }
 
 function buildWorld(box: Box): HTMLElement {
