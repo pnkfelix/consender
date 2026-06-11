@@ -76,9 +76,13 @@ function updateSelection(): void {
 // Boxes in this set are showing raw source even when a render mode is active.
 const rawViewBoxIds = new Set<string>();
 
+const KNOWN_RENDER_MODES = new Set(["svg"]);
+
 function getBoxRenderMode(box: Box): string {
   const renderChild = box.children.find(c => c.label.trim().toLowerCase() === "render");
-  return renderChild ? renderChild.text.trim().toLowerCase() : "text";
+  if (!renderChild) return "text";
+  const mode = renderChild.text.trim().toLowerCase();
+  return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
 function buildSvgLayer(box: Box): HTMLElement {
