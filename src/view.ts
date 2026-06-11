@@ -230,14 +230,15 @@ function buildWorld(box: Box): HTMLElement {
     }
   });
 
-  for (const child of box.children) {
-    content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+  const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
+  if (!isRenderedWorld) {
+    for (const child of box.children) {
+      content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+    }
   }
   makeLassoGesture(content, box);
   if (box.text) {
-    const renderMode = getBoxRenderMode(box);
-    const isRaw = rawViewBoxIds.has(box.id);
-    if (renderMode === "svg" && !isRaw) {
+    if (isRenderedWorld) {
       content.insertBefore(buildSvgLayer(box), content.firstChild);
     } else {
       const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
@@ -564,16 +565,15 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
   const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
+  const isRenderedWindow = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
 
-  // Child boxes always use absolute positioning — unchanged from text-free behavior.
-  // The text layer (when present) is inserted first so it paints behind the boxes.
-  for (const child of box.children) {
-    body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+  if (!isRenderedWindow) {
+    for (const child of box.children) {
+      body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+    }
   }
   if (box.text) {
-    const renderMode = getBoxRenderMode(box);
-    const isRaw = rawViewBoxIds.has(box.id);
-    const layer = (renderMode === "svg" && !isRaw) ? buildSvgLayer(box) : buildTextLayer(box);
+    const layer = isRenderedWindow ? buildSvgLayer(box) : buildTextLayer(box);
     body.insertBefore(layer, body.firstChild);
   }
 
