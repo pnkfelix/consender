@@ -26,7 +26,12 @@ let worldId!: string;
 let selectedBoxId: string | null = null;
 
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
-  return box.toolbarPolicy ?? "always";
+  let cur: Box | null = box;
+  while (cur) {
+    if (cur.toolbarPolicy != null) return cur.toolbarPolicy;
+    cur = cur.parent;
+  }
+  return "always";
 }
 
 function updateSelection(): void {
