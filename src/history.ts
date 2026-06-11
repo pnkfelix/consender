@@ -580,10 +580,68 @@ export function mkSetDisplay(
   return { kind: "SetDisplay", id: box.id, display: newDisplay, prevDisplay: box.display };
 }
 
-export function mkAddBox(parent: Box): Op {
+const NEW_BOX_W = 180;
+const NEW_BOX_H = 130;
+const ICON_APPROX_W = 120;
+const ICON_APPROX_H = 44;
+
+function boxFitsInParent(x: number, y: number, w: number, h: number, pw: number, ph: number): boolean {
+  return x >= 0 && y >= 0 && x + w <= pw && y + h <= ph;
+}
+
+function overlapsAny(x: number, y: number, w: number, h: number, siblings: Box[]): boolean {
+  for (const s of siblings) {
+    const sw = s.display === "window" ? s.w : ICON_APPROX_W;
+    const sh = s.display === "window" ? s.h : ICON_APPROX_H;
+    if (x < s.x + sw && x + w > s.x && y < s.y + sh && y + h > s.y) return true;
+  }
+  return false;
+}
+
+function findClearSpot(
+  siblings: Box[],
+  pw: number,
+  ph: number,
+  w: number,
+  h: number
+): { x: number; y: number } | null {
+  const STEP = 10;
+  for (let scanY = 0; scanY + h <= ph; scanY += STEP) {
+    for (let scanX = 0; scanX + w <= pw; scanX += STEP) {
+      if (!overlapsAny(scanX, scanY, w, h, siblings)) return { x: scanX, y: scanY };
+    }
+  }
+  return null;
+}
+
+function freshBoxPosition(
+  parent: Box,
+  pw: number,
+  ph: number
+): { x: number; y: number } {
+  const kids = parent.children;
+
+  if (kids.length >= 2) {
+    const last = kids[kids.length - 1];
+    const prev = kids[kids.length - 2];
+    const lx = last.x + (last.x - prev.x);
+    const ly = last.y + (last.y - prev.y);
+    if (boxFitsInParent(lx, ly, NEW_BOX_W, NEW_BOX_H, pw, ph)) {
+      return { x: lx, y: ly };
+    }
+  }
+
+  const spot = findClearSpot(kids, pw, ph, NEW_BOX_W, NEW_BOX_H);
+  if (spot) return spot;
+
+  return { x: 20 + Math.random() * 80, y: 20 + Math.random() * 60 };
+}
+
+export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
   const id = freshId();
-  const x = 20 + Math.random() * 80;
-  const y = 20 + Math.random() * 60;
+  const pw = parentW ?? parent.w;
+  const ph = parentH ?? Math.max(0, parent.h - BAR_H);
+  const { x, y } = freshBoxPosition(parent, pw, ph);
   const serialized: SerializedBox = {
     id,
     label: "box",
@@ -592,8 +650,8 @@ export function mkAddBox(parent: Box): Op {
     parentId: parent.id,
     x,
     y,
-    w: 180,
-    h: 130,
+    w: NEW_BOX_W,
+    h: NEW_BOX_H,
   };
   const subtree: OpSubtree = {
     rootId: id,
