@@ -19,12 +19,61 @@ import {
   undoBox,
 } from "./history.js";
 
+type ToolbarPolicy = "always" | "focus";
+
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
+let selectedBoxId: string | null = null;
+let helpEl!: HTMLDivElement;
+
+// Map box labels to context-sensitive help text shown in the help bar.
+const helpMap: Record<string, string> = {
+  "toolbarPolicy": "Controls toolbar visibility for sibling boxes. " +
+    "Text: \"focus\" hides buttons until a box is tapped; \"always\" keeps them visible. " +
+    "Place inside a parent to configure all its children. Walks up the tree if not found.",
+};
+
+// A box's toolbarPolicy comes from its own children first, then ancestor
+// children walking up the chain. Nearer ancestor takes precedence.
+function resolveToolbarPolicy(box: Box): ToolbarPolicy {
+  let cur: Box | null = box;
+  while (cur !== null) {
+    const cfg = cur.children.find(c => c.label === "toolbarPolicy");
+    if (cfg) {
+      const t = cfg.text.trim().toLowerCase();
+      if (t === "focus") return "focus";
+      if (t === "always") return "always";
+    }
+    cur = cur.parent;
+  }
+  return "always";
+}
+
+function updateHelpBar(): void {
+  const selectedBox = selectedBoxId ? findBox(root, selectedBoxId) : null;
+  const world = findBox(root, worldId);
+  const label = selectedBox?.label ?? world?.label;
+  const text = label != null ? helpMap[label] : undefined;
+  helpEl.textContent = text ?? "";
+  helpEl.style.display = text != null ? "block" : "none";
+}
+
+function updateSelection(): void {
+  document.querySelectorAll<HTMLElement>(".box-window").forEach(el => {
+    el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
+  });
+  updateHelpBar();
+}
 
 export function mount(app: HTMLElement): void {
   appEl = app;
+
+  helpEl = document.createElement("div");
+  helpEl.className = "help-bar";
+  helpEl.style.display = "none";
+  document.body.appendChild(helpEl);
+
   const loaded = loadOrInit();
   root = loaded.root;
   worldId = loaded.worldId;
@@ -58,6 +107,7 @@ function render(): void {
   if (!world) return;
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
+  updateHelpBar();
 }
 
 function buildWorld(box: Box): HTMLElement {
@@ -131,6 +181,14 @@ function buildWorld(box: Box): HTMLElement {
   const content = document.createElement("div");
   content.className = "box-content";
   content.style.touchAction = "none";
+
+  content.addEventListener("pointerdown", () => {
+    if (selectedBoxId !== null) {
+      selectedBoxId = null;
+      updateSelection();
+    }
+  });
+
   for (const child of box.children) {
     content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
   }
@@ -326,10 +384,22 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
 function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-window";
+  el.dataset.boxId = box.id;
+  const policy = resolveToolbarPolicy(box);
+  el.dataset.toolbarPolicy = policy;
+  if (selectedBoxId === box.id) el.classList.add("box-selected");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
+
+  el.addEventListener("pointerdown", (e: PointerEvent) => {
+    if (selectedBoxId !== box.id) {
+      selectedBoxId = box.id;
+      updateSelection();
+    }
+    e.stopPropagation();
+  });
 
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
