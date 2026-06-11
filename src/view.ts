@@ -5,12 +5,12 @@ import {
   loadOrInit,
   mkAddBox,
   mkCollapseBox,
+  mkEditText,
   mkGroupBoxes,
   mkMoveBox,
   mkRemoveBox,
   mkRenameBox,
   mkResizeBox,
-  mkSetBoxText,
   mkSetDisplay,
   mkWrapInParent,
   persist,
@@ -269,7 +269,7 @@ function buildWorld(box: Box): HTMLElement {
       if (done) return;
       done = true;
       if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
+        const result = recordOn(root, worldId, mkEditText(box, ta.value));
         root = result.root;
         worldId = result.worldId;
       }
@@ -623,7 +623,7 @@ function buildWindow(box: Box): HTMLElement {
       if (done) return;
       done = true;
       if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
+        const result = recordOn(root, worldId, mkEditText(box, ta.value));
         root = result.root;
         worldId = result.worldId;
       }

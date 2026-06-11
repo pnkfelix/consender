@@ -4,12 +4,107 @@ import {
   getNextId,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Guard, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
+import type { Box, DisplayMode, Guard, Line, LineOp, Op, OpSubtree, PositionRecord, SerializedBox, SerializedLine, StackEntry } from "./model.js";
 
-export type { Guard, Op, OpSubtree, SerializedBox, StackEntry };
+export type { Guard, Line, LineOp, Op, OpSubtree, SerializedBox, SerializedLine, StackEntry };
 
 // Mainline key is stable for backward compatibility with existing stored data.
 const MAINLINE_KEY = "consender-state";
+
+// --- line helpers ---
+
+function deserializeLines(s: SerializedBox): Line[] {
+  if (s.lines && s.lines.length > 0) return s.lines.map(l => ({ id: l.id, text: l.text }));
+  if (s.text) return s.text.split("\n").map(t => ({ id: freshId(), text: t }));
+  return [];
+}
+
+// Sets both text and lines from a plain string, generating fresh line IDs.
+// Used by structural ops (CollapseBox, GroupBoxes) that deal in flat strings.
+function setBoxContent(box: Box, text: string): void {
+  box.text = text;
+  box.lines = text ? text.split("\n").map(t => ({ id: freshId(), text: t })) : [];
+}
+
+// Sets both text and lines from a Line array.
+function setBoxLines(box: Box, lines: Line[]): void {
+  box.lines = lines;
+  box.text = lines.map(l => l.text).join("\n");
+}
+
+// LCS-based: match new line texts to old lines, preserving IDs where text is unchanged.
+function matchLinesForEdit(oldLines: Line[], newTexts: string[]): SerializedLine[] {
+  if (newTexts.length === 0) return [];
+  const m = oldLines.length, n = newTexts.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldLines[i-1].text === newTexts[j-1]
+        ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  const newToOld = new Map<number, Line>();
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i-1].text === newTexts[j-1]) {
+      newToOld.set(j-1, oldLines[i-1]); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      j--;
+    } else {
+      i--;
+    }
+  }
+  return newTexts.map((text, idx) => {
+    const matched = newToOld.get(idx);
+    return matched ? { id: matched.id, text } : { id: freshId(), text };
+  });
+}
+
+// Compute a LineOp sequence describing the diff from oldLines to newLines (matched by ID).
+function diffLinesForOp(oldLines: Line[], newLines: SerializedLine[]): LineOp[] {
+  const ops: LineOp[] = [];
+  const oldIds = oldLines.map(l => l.id);
+  const newIds = newLines.map(l => l.id);
+  const m = oldIds.length, n = newIds.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldIds[i-1] === newIds[j-1]
+        ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  type Edit = { type: "keep" | "delete" | "insert"; oi?: number; ni?: number };
+  const edits: Edit[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldIds[i-1] === newIds[j-1]) {
+      edits.unshift({ type: "keep", oi: i-1, ni: j-1 }); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      edits.unshift({ type: "insert", ni: j-1 }); j--;
+    } else {
+      edits.unshift({ type: "delete", oi: i-1 }); i--;
+    }
+  }
+  let lastSurvivorId: string | null = null;
+  for (const edit of edits) {
+    if (edit.type === "keep") {
+      lastSurvivorId = oldIds[edit.oi!];
+    } else if (edit.type === "delete") {
+      const ol = oldLines[edit.oi!];
+      const prevAfterId = edit.oi! > 0 ? oldIds[edit.oi! - 1] : null;
+      ops.push({ kind: "DeleteLine", id: ol.id, prevText: ol.text, prevAfterId });
+    } else {
+      const nl = newLines[edit.ni!];
+      ops.push({ kind: "InsertLine", afterId: lastSurvivorId, newId: nl.id, text: nl.text });
+      lastSurvivorId = nl.id;
+    }
+  }
+  return ops;
+}
+
+function invertLineOp(op: LineOp): LineOp {
+  switch (op.kind) {
+    case "InsertLine": return { kind: "DeleteLine", id: op.newId, prevText: op.text, prevAfterId: op.afterId };
+    case "DeleteLine": return { kind: "InsertLine", afterId: op.prevAfterId, newId: op.id, text: op.prevText };
+    case "EditLine":   return { kind: "EditLine",   id: op.id, newText: op.prevText, prevText: op.newText };
+  }
+}
 
 // Each deployment (mainline vs. each preview PR) gets its own storage slot so
 // that preview-only op kinds in undo stacks can't corrupt other deployments.
@@ -65,7 +160,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
     y: box.y,
     w: box.w,
     h: box.h,
-    text: box.text || undefined,
+    lines: box.lines.length > 0 ? box.lines.map(l => ({ id: l.id, text: l.text })) : undefined,
   };
   for (const child of box.children) {
     collectSubtree(child, acc);
@@ -82,6 +177,7 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(subtree.boxes)) {
     const s = subtree.boxes[id];
+    const lines = deserializeLines(s);
     live[id] = {
       id: s.id,
       label: s.label,
@@ -92,7 +188,8 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
       y: s.y,
       w: s.w,
       h: s.h,
-      text: s.text ?? "",
+      lines,
+      text: lines.map(l => l.text).join("\n"),
       undoStack: [],
       redoStack: [],
     };
@@ -120,7 +217,7 @@ function collectPersistedSubtree(
     y: box.y,
     w: box.w,
     h: box.h,
-    text: box.text || undefined,
+    lines: box.lines.length > 0 ? box.lines.map(l => ({ id: l.id, text: l.text })) : undefined,
     undoStack: box.undoStack,
     redoStack: box.redoStack,
   };
@@ -145,6 +242,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(data.boxes)) {
     const s = data.boxes[id];
+    const lines = deserializeLines(s);
     live[id] = {
       id: s.id,
       label: s.label,
@@ -155,7 +253,8 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
       y: s.y,
       w: s.w,
       h: s.h,
-      text: s.text ?? "",
+      lines,
+      text: lines.map(l => l.text).join("\n"),
       undoStack: migrateStackEntries(s.undoStack ?? []),
       redoStack: migrateStackEntries(s.redoStack ?? []),
     };
@@ -179,6 +278,9 @@ export function invertOp(op: Op): Op {
       return { kind: "RenameBox", id: op.id, label: op.prevLabel, prevLabel: op.label };
     case "SetBoxText":
       return { kind: "SetBoxText", id: op.id, text: op.prevText, prevText: op.text };
+    case "EditText":
+      return { kind: "EditText", boxId: op.boxId, prevLines: op.newLines, newLines: op.prevLines,
+               lineOps: [...op.lineOps].reverse().map(invertLineOp) };
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
     case "AddBox":
@@ -223,7 +325,12 @@ export function applyOp(
     }
     case "SetBoxText": {
       const box = findBox(root, op.id);
-      if (box) { box.text = op.text; }
+      if (box) setBoxContent(box, op.text);
+      return { root, worldId };
+    }
+    case "EditText": {
+      const box = findBox(root, op.boxId);
+      if (box) setBoxLines(box, op.newLines.map(l => ({ id: l.id, text: l.text })));
       return { root, worldId };
     }
     case "SetDisplay": {
@@ -266,6 +373,7 @@ export function applyOp(
         w: 180,
         h: 130,
         text: "",
+        lines: [] as Line[],
         undoStack: [] as StackEntry[],
         redoStack: [] as StackEntry[],
       };
@@ -309,6 +417,7 @@ export function applyOp(
         w: op.groupW,
         h: op.groupH,
         text: "",
+        lines: [],
         undoStack: [],
         redoStack: [],
       };
@@ -320,8 +429,8 @@ export function applyOp(
         group.children.push(child);
       }
       if (op.groupText !== undefined) {
-        world.text = op.worldNewText ?? world.text;
-        group.text = op.groupText;
+        setBoxContent(world, op.worldNewText ?? world.text);
+        setBoxContent(group, op.groupText);
       }
       world.children = world.children.filter(c => !op.childIds.includes(c.id));
       world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, group);
@@ -349,7 +458,7 @@ export function applyOp(
         world.children.splice(r.index, 0, child);
       }
       if (op.worldPrevText !== undefined) {
-        world.text = op.worldPrevText;
+        setBoxContent(world, op.worldPrevText);
       }
       let newWorldId = worldId;
       if (worldId === op.groupId) newWorldId = op.worldId;
@@ -369,7 +478,7 @@ export function applyOp(
         child.parent = parent;
         parent.children.splice(op.boxIndex + i, 0, child);
       }
-      parent.text = op.parentNewText;
+      setBoxContent(parent, op.parentNewText);
       let newWorldId = worldId;
       if (worldId === op.boxId) newWorldId = op.parentId;
       return { root, worldId: newWorldId };
@@ -382,6 +491,7 @@ export function applyOp(
         .filter((c): c is Box => c !== undefined);
       parent.children = parent.children.filter(c => !op.childIds.includes(c.id));
       const sBox = op.subtree.boxes[op.boxId];
+      const sBoxLines = deserializeLines(sBox);
       const box: Box = {
         id: sBox.id,
         label: sBox.label,
@@ -392,7 +502,8 @@ export function applyOp(
         y: sBox.y,
         w: sBox.w,
         h: sBox.h,
-        text: sBox.text ?? "",
+        lines: sBoxLines,
+        text: sBoxLines.map(l => l.text).join("\n"),
         undoStack: [],
         redoStack: [],
       };
@@ -404,7 +515,7 @@ export function applyOp(
         box.children.push(child);
       }
       parent.children.splice(op.boxIndex, 0, box);
-      parent.text = op.parentPrevText;
+      setBoxContent(parent, op.parentPrevText);
       return { root, worldId };
     }
   }
@@ -420,6 +531,8 @@ function stackBoxId(op: Op, root: Box): string | null {
       return null;
     case "SetBoxText":
       return op.id;
+    case "EditText":
+      return op.boxId;
     case "AddBox":
     case "RemoveBox":
       return op.parentId;
@@ -717,6 +830,15 @@ export function mkWrapInParent(box: Box): Op {
 
 export function mkSetBoxText(box: Box, newText: string): Op {
   return { kind: "SetBoxText", id: box.id, text: newText, prevText: box.text };
+}
+
+export function mkEditText(box: Box, newText: string): Op {
+  const normalized = newText.replace(/\r\n|\r/g, "\n");
+  const newLineTexts = normalized === "" ? [] : normalized.split("\n");
+  const prevLines: SerializedLine[] = box.lines.map(l => ({ id: l.id, text: l.text }));
+  const newLines = matchLinesForEdit(box.lines, newLineTexts);
+  const lineOps = diffLinesForOp(box.lines, newLines);
+  return { kind: "EditText", boxId: box.id, prevLines, newLines, lineOps };
 }
 
 // BAR_H must match .box-window-bar min-height in CSS
