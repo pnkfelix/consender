@@ -1,4 +1,4 @@
-import type { Box, ToolbarPolicy } from "./model.js";
+import type { Box } from "./model.js";
 import {
   canUndo,
   findBox,
@@ -12,13 +12,14 @@ import {
   mkResizeBox,
   mkSetBoxText,
   mkSetDisplay,
-  mkSetToolbarPolicy,
   mkWrapInParent,
   persist,
   recordOn,
   redoBox,
   undoBox,
 } from "./history.js";
+
+type ToolbarPolicy = "always" | "focus";
 
 let appEl!: HTMLElement;
 let root!: Box;
@@ -27,12 +28,23 @@ let selectedBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
 // Map box labels to context-sensitive help text shown in the help bar.
-const helpMap: Record<string, string> = {};
+const helpMap: Record<string, string> = {
+  "toolbarPolicy": "Controls toolbar visibility for sibling boxes. " +
+    "Text: \"focus\" hides buttons until a box is tapped; \"always\" keeps them visible. " +
+    "Place inside a parent to configure all its children. Walks up the tree if not found.",
+};
 
+// Look for a sibling named "toolbarPolicy" and read its text content as the policy.
+// Walks up the parent chain until a config box is found; defaults to "always".
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
-  let cur: Box | null = box;
+  let cur: Box | null = box.parent;
   while (cur) {
-    if (cur.toolbarPolicy != null) return cur.toolbarPolicy;
+    const cfg = cur.children.find(c => c.label === "toolbarPolicy");
+    if (cfg) {
+      const t = cfg.text.trim().toLowerCase();
+      if (t === "focus") return "focus";
+      if (t === "always") return "always";
+    }
     cur = cur.parent;
   }
   return "always";
@@ -163,24 +175,6 @@ function buildWorld(box: Box): HTMLElement {
   textBtn.textContent = "T";
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
-
-  const policyLabels: Record<string, string> = { always: "≡", focus: "◉" };
-  const policyWorldBtn = document.createElement("button");
-  const updatePolicyWorldBtn = () => {
-    const p = box.toolbarPolicy ?? null;
-    policyWorldBtn.textContent = p ? policyLabels[p] : "↑";
-    policyWorldBtn.title = `toolbar policy: ${p ?? "inherit"} (click to cycle)`;
-  };
-  updatePolicyWorldBtn();
-  policyWorldBtn.onclick = () => {
-    const cur = box.toolbarPolicy ?? null;
-    const next: ToolbarPolicy | null = cur === null ? "always" : cur === "always" ? "focus" : null;
-    const result = recordOn(root, worldId, mkSetToolbarPolicy(box, next));
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(policyWorldBtn);
 
   el.appendChild(bar);
 
@@ -505,20 +499,6 @@ function buildWindow(box: Box): HTMLElement {
     render();
   };
   bar.appendChild(delBtn);
-
-  const policyLabels: Record<string, string> = { always: "≡", focus: "◉" };
-  const policyBtn = document.createElement("button");
-  policyBtn.textContent = box.toolbarPolicy ? policyLabels[box.toolbarPolicy] : "↑";
-  policyBtn.title = `toolbar policy: ${box.toolbarPolicy ?? "inherit"} (click to cycle)`;
-  policyBtn.onclick = () => {
-    const cur = box.toolbarPolicy ?? null;
-    const next: ToolbarPolicy | null = cur === null ? "always" : cur === "always" ? "focus" : null;
-    const result = recordOn(root, worldId, mkSetToolbarPolicy(box, next));
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(policyBtn);
 
   el.appendChild(bar);
 

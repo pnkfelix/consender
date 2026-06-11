@@ -1,5 +1,4 @@
 export type DisplayMode = "icon" | "window";
-export type ToolbarPolicy = "always" | "focus";
 
 export interface PositionRecord { id: string; x: number; y: number }
 
@@ -9,7 +8,6 @@ export type Op =
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
   | { kind: "SetBoxText";       id: string; text: string; prevText: string }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
-  | { kind: "SetToolbarPolicy"; id: string; policy: ToolbarPolicy | null; prevPolicy: ToolbarPolicy | null }
   | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
   | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
   | { kind: "WrapInParent";     wrapperId: string; childId: string; prevX: number; prevY: number }
@@ -61,7 +59,6 @@ export interface SerializedBox {
   w: number;
   h: number;
   text?: string;
-  toolbarPolicy?: ToolbarPolicy | null;
 }
 
 export type Guard =
@@ -80,7 +77,6 @@ export interface Box {
   w: number;
   h: number;
   text: string;
-  toolbarPolicy?: ToolbarPolicy | null;
   undoStack: StackEntry[];
   redoStack: StackEntry[];
 }
