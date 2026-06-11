@@ -34,10 +34,10 @@ const helpMap: Record<string, string> = {
     "Place inside a parent to configure all its children. Walks up the tree if not found.",
 };
 
-// Look for a sibling named "toolbarPolicy" and read its text content as the policy.
-// Walks up the parent chain until a config box is found; defaults to "always".
+// A box's toolbarPolicy comes from its own children first, then ancestor children
+// (inheriting up the chain). Defaults to "always" if no config box is found.
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
-  let cur: Box | null = box.parent;
+  let cur: Box | null = box;
   while (cur) {
     const cfg = cur.children.find(c => c.label === "toolbarPolicy");
     if (cfg) {
