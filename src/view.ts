@@ -71,7 +71,7 @@ function buildWorld(box: Box): HTMLElement {
   const newBtn = document.createElement("button");
   newBtn.textContent = "+ box";
   newBtn.onclick = () => {
-    const op = mkAddBox(box);
+    const op = mkAddBox(box, window.innerWidth, window.innerHeight - WINDOW_BAR_H);
     const result = recordOn(root, worldId, op);
     root = result.root;
     worldId = result.worldId;
