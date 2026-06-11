@@ -4,9 +4,9 @@ import {
   getNextId,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Guard, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
+import type { Box, DisplayMode, Guard, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry, ToolbarPolicy } from "./model.js";
 
-export type { Guard, Op, OpSubtree, SerializedBox, StackEntry };
+export type { Guard, Op, OpSubtree, SerializedBox, StackEntry, ToolbarPolicy };
 
 // Mainline key is stable for backward compatibility with existing stored data.
 const MAINLINE_KEY = "consender-state";
@@ -66,6 +66,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
     w: box.w,
     h: box.h,
     text: box.text || undefined,
+    toolbarPolicy: box.toolbarPolicy ?? undefined,
   };
   for (const child of box.children) {
     collectSubtree(child, acc);
@@ -93,6 +94,7 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
       w: s.w,
       h: s.h,
       text: s.text ?? "",
+      toolbarPolicy: s.toolbarPolicy ?? undefined,
       undoStack: [],
       redoStack: [],
     };
@@ -121,6 +123,7 @@ function collectPersistedSubtree(
     w: box.w,
     h: box.h,
     text: box.text || undefined,
+    toolbarPolicy: box.toolbarPolicy ?? undefined,
     undoStack: box.undoStack,
     redoStack: box.redoStack,
   };
@@ -156,6 +159,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
       w: s.w,
       h: s.h,
       text: s.text ?? "",
+      toolbarPolicy: s.toolbarPolicy ?? undefined,
       undoStack: migrateStackEntries(s.undoStack ?? []),
       redoStack: migrateStackEntries(s.redoStack ?? []),
     };
@@ -181,6 +185,8 @@ export function invertOp(op: Op): Op {
       return { kind: "SetBoxText", id: op.id, text: op.prevText, prevText: op.text };
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
+    case "SetToolbarPolicy":
+      return { kind: "SetToolbarPolicy", id: op.id, policy: op.prevPolicy, prevPolicy: op.policy };
     case "AddBox":
       return { kind: "RemoveBox", parentId: op.parentId, index: op.index, subtree: op.subtree };
     case "RemoveBox":
@@ -229,6 +235,11 @@ export function applyOp(
     case "SetDisplay": {
       const box = findBox(root, op.id);
       if (box) { box.display = op.display; }
+      return { root, worldId };
+    }
+    case "SetToolbarPolicy": {
+      const box = findBox(root, op.id);
+      if (box) { box.toolbarPolicy = op.policy ?? undefined; }
       return { root, worldId };
     }
     case "AddBox": {
@@ -418,6 +429,8 @@ function stackBoxId(op: Op, root: Box): string | null {
       return findBox(root, op.id)?.parent?.id ?? op.id;
     case "SetDisplay":
       return null;
+    case "SetToolbarPolicy":
+      return findBox(root, op.id)?.parent?.id ?? op.id;
     case "SetBoxText":
       return op.id;
     case "AddBox":
@@ -578,6 +591,13 @@ export function mkSetDisplay(
   newDisplay: DisplayMode
 ): Op {
   return { kind: "SetDisplay", id: box.id, display: newDisplay, prevDisplay: box.display };
+}
+
+export function mkSetToolbarPolicy(
+  box: Box,
+  policy: ToolbarPolicy | null
+): Op {
+  return { kind: "SetToolbarPolicy", id: box.id, policy, prevPolicy: box.toolbarPolicy ?? null };
 }
 
 const NEW_BOX_W = 180;

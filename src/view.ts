@@ -1,4 +1,4 @@
-import type { Box } from "./model.js";
+import type { Box, ToolbarPolicy } from "./model.js";
 import {
   canUndo,
   findBox,
@@ -12,6 +12,7 @@ import {
   mkResizeBox,
   mkSetBoxText,
   mkSetDisplay,
+  mkSetToolbarPolicy,
   mkWrapInParent,
   persist,
   recordOn,
@@ -22,6 +23,22 @@ import {
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
+let selectedBoxId: string | null = null;
+
+function resolveToolbarPolicy(box: Box): ToolbarPolicy {
+  let cur: Box | null = box;
+  while (cur) {
+    if (cur.toolbarPolicy != null) return cur.toolbarPolicy;
+    cur = cur.parent;
+  }
+  return "always";
+}
+
+function updateSelection(): void {
+  document.querySelectorAll<HTMLElement>(".box-window").forEach(el => {
+    el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
+  });
+}
 
 export function mount(app: HTMLElement): void {
   appEl = app;
@@ -126,11 +143,37 @@ function buildWorld(box: Box): HTMLElement {
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
 
+  const policyLabels: Record<string, string> = { always: "≡", focus: "◉" };
+  const policyWorldBtn = document.createElement("button");
+  const updatePolicyWorldBtn = () => {
+    const p = box.toolbarPolicy ?? null;
+    policyWorldBtn.textContent = p ? policyLabels[p] : "↑";
+    policyWorldBtn.title = `toolbar policy: ${p ?? "inherit"} (click to cycle)`;
+  };
+  updatePolicyWorldBtn();
+  policyWorldBtn.onclick = () => {
+    const cur = box.toolbarPolicy ?? null;
+    const next: ToolbarPolicy | null = cur === null ? "always" : cur === "always" ? "focus" : null;
+    const result = recordOn(root, worldId, mkSetToolbarPolicy(box, next));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(policyWorldBtn);
+
   el.appendChild(bar);
 
   const content = document.createElement("div");
   content.className = "box-content";
   content.style.touchAction = "none";
+
+  content.addEventListener("pointerdown", () => {
+    if (selectedBoxId !== null) {
+      selectedBoxId = null;
+      updateSelection();
+    }
+  });
+
   for (const child of box.children) {
     content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
   }
@@ -326,10 +369,22 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
 function buildWindow(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-window";
+  el.dataset.boxId = box.id;
+  const policy = resolveToolbarPolicy(box);
+  el.dataset.toolbarPolicy = policy;
+  if (selectedBoxId === box.id) el.classList.add("box-selected");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
+
+  el.addEventListener("pointerdown", (e: PointerEvent) => {
+    if (selectedBoxId !== box.id) {
+      selectedBoxId = box.id;
+      updateSelection();
+    }
+    e.stopPropagation();
+  });
 
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
@@ -429,6 +484,20 @@ function buildWindow(box: Box): HTMLElement {
     render();
   };
   bar.appendChild(delBtn);
+
+  const policyLabels: Record<string, string> = { always: "≡", focus: "◉" };
+  const policyBtn = document.createElement("button");
+  policyBtn.textContent = box.toolbarPolicy ? policyLabels[box.toolbarPolicy] : "↑";
+  policyBtn.title = `toolbar policy: ${box.toolbarPolicy ?? "inherit"} (click to cycle)`;
+  policyBtn.onclick = () => {
+    const cur = box.toolbarPolicy ?? null;
+    const next: ToolbarPolicy | null = cur === null ? "always" : cur === "always" ? "focus" : null;
+    const result = recordOn(root, worldId, mkSetToolbarPolicy(box, next));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(policyBtn);
 
   el.appendChild(bar);
 
