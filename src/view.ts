@@ -73,6 +73,37 @@ function updateSelection(): void {
   updateHelpBar();
 }
 
+// Boxes in this set are showing raw source even when a render mode is active.
+const rawViewBoxIds = new Set<string>();
+
+function getBoxRenderMode(box: Box): string {
+  const renderChild = box.children.find(c => c.label.trim().toLowerCase() === "render");
+  return renderChild ? renderChild.text.trim().toLowerCase() : "text";
+}
+
+function buildSvgLayer(box: Box): HTMLElement {
+  const layer = document.createElement("div");
+  layer.className = "box-svg-layer";
+  layer.innerHTML = box.text;
+  return layer;
+}
+
+function buildRenderToggleBtn(box: Box): HTMLButtonElement | null {
+  const mode = getBoxRenderMode(box);
+  if (mode === "text") return null;
+  const isRaw = rawViewBoxIds.has(box.id);
+  const btn = document.createElement("button");
+  btn.title = isRaw ? `render as ${mode}` : "show raw source";
+  btn.textContent = isRaw ? mode : "raw";
+  if (!isRaw) btn.classList.add("box-btn-rendering");
+  btn.onclick = () => {
+    if (rawViewBoxIds.has(box.id)) rawViewBoxIds.delete(box.id);
+    else rawViewBoxIds.add(box.id);
+    render();
+  };
+  return btn;
+}
+
 export function mount(app: HTMLElement): void {
   appEl = app;
 
@@ -183,6 +214,9 @@ function buildWorld(box: Box): HTMLElement {
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
 
+  const renderToggle = buildRenderToggleBtn(box);
+  if (renderToggle) bar.appendChild(renderToggle);
+
   el.appendChild(bar);
 
   const content = document.createElement("div");
@@ -201,9 +235,15 @@ function buildWorld(box: Box): HTMLElement {
   }
   makeLassoGesture(content, box);
   if (box.text) {
-    const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
-    tl.dataset.worldTextLayer = "1";
-    content.insertBefore(tl, content.firstChild);
+    const renderMode = getBoxRenderMode(box);
+    const isRaw = rawViewBoxIds.has(box.id);
+    if (renderMode === "svg" && !isRaw) {
+      content.insertBefore(buildSvgLayer(box), content.firstChild);
+    } else {
+      const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
+      tl.dataset.worldTextLayer = "1";
+      content.insertBefore(tl, content.firstChild);
+    }
   }
   el.appendChild(content);
 
@@ -490,6 +530,9 @@ function buildWindow(box: Box): HTMLElement {
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
 
+  const renderToggleW = buildRenderToggleBtn(box);
+  if (renderToggleW) bar.appendChild(renderToggleW);
+
   const collapseBtn = document.createElement("button");
   collapseBtn.title = "collapse into parent";
   collapseBtn.textContent = "⤵";
@@ -528,7 +571,10 @@ function buildWindow(box: Box): HTMLElement {
     body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
   }
   if (box.text) {
-    body.insertBefore(buildTextLayer(box), body.firstChild);
+    const renderMode = getBoxRenderMode(box);
+    const isRaw = rawViewBoxIds.has(box.id);
+    const layer = (renderMode === "svg" && !isRaw) ? buildSvgLayer(box) : buildTextLayer(box);
+    body.insertBefore(layer, body.firstChild);
   }
 
   textBtn.onclick = () => {
