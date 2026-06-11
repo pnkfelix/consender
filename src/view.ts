@@ -35,10 +35,11 @@ const helpMap: Record<string, string> = {
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor children
-// (inheriting up the chain). Defaults to "always" if no config box is found.
+// (inheriting up the chain), but never crossing into the current world box —
+// each sub-window's policy is resolved within its own context.
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
-  while (cur) {
+  while (cur !== null && cur.id !== worldId) {
     const cfg = cur.children.find(c => c.label === "toolbarPolicy");
     if (cfg) {
       const t = cfg.text.trim().toLowerCase();
