@@ -2,32 +2,37 @@ export type DisplayMode = "icon" | "window";
 
 export interface PositionRecord { id: string; x: number; y: number }
 
+export interface NamedChild {
+  name: string;
+  box: Box;
+}
+
 export type Op =
   | { kind: "MoveBox";          id: string; x: number; y: number; prevX: number; prevY: number }
   | { kind: "ResizeBox";        id: string; w: number; h: number; prevW: number; prevH: number }
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
   | { kind: "SetBoxText";       id: string; text: string; prevText: string }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
-  | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
-  | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
-  | { kind: "WrapInParent";     wrapperId: string; childId: string; prevX: number; prevY: number }
-  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; prevX: number; prevY: number }
+  | { kind: "AddBox";           parentId: string; index: number; name: string; subtree: OpSubtree }
+  | { kind: "RemoveBox";        parentId: string; index: number; name: string; subtree: OpSubtree }
+  | { kind: "WrapInParent";     wrapperId: string; childId: string; childName: string; prevX: number; prevY: number }
+  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; childName: string; prevX: number; prevY: number }
   | { kind: "GroupBoxes";
-      worldId: string; groupId: string;
+      worldId: string; groupId: string; groupName: string;
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
       groupInsertIndex: number;
       worldPrevText?: string; worldNewText?: string; groupText?: string }
   | { kind: "UngroupBoxes";
-      worldId: string; groupId: string;
+      worldId: string; groupId: string; groupName: string;
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
       groupInsertIndex: number;
       worldPrevText?: string; worldNewText?: string; groupText?: string }
   | { kind: "CollapseBox";
-      boxId: string; parentId: string; boxIndex: number;
+      boxId: string; parentId: string; boxIndex: number; boxName: string;
       subtree: OpSubtree;
       childIds: string[];
       prevPositions: PositionRecord[];
@@ -35,7 +40,7 @@ export type Op =
       parentPrevText: string;
       parentNewText: string; }
   | { kind: "UncollapseBox";
-      boxId: string; parentId: string; boxIndex: number;
+      boxId: string; parentId: string; boxIndex: number; boxName: string;
       subtree: OpSubtree;
       childIds: string[];
       prevPositions: PositionRecord[];
@@ -50,9 +55,8 @@ export interface OpSubtree {
 
 export interface SerializedBox {
   id: string;
-  label: string;
   display: DisplayMode;
-  childIds: string[];
+  children: Array<{ id: string; name: string }>;
   parentId: string | null;
   x: number;
   y: number;
@@ -68,9 +72,8 @@ export type StackEntry = { op: Op; guard?: Guard };
 
 export interface Box {
   id: string;
-  label: string;
   display: DisplayMode;
-  children: Box[];
+  children: NamedChild[];
   parent: Box | null;
   x: number;
   y: number;
@@ -95,10 +98,15 @@ export function setNextId(n: number): void {
   nextId = n;
 }
 
-export function createBox(label: string, parent: Box | null): Box {
+export function getBoxName(box: Box): string {
+  if (!box.parent) return "world";
+  const nc = box.parent.children.find(c => c.box === box);
+  return nc?.name ?? "";
+}
+
+export function createBox(parent: Box | null): Box {
   return {
     id: freshId(),
-    label,
     display: "window",
     children: [],
     parent,
@@ -113,12 +121,12 @@ export function createBox(label: string, parent: Box | null): Box {
 }
 
 export function createRoot(): Box {
-  return createBox("world", null);
+  return createBox(null);
 }
 
-export function wrapInParent(box: Box): Box {
-  const parent = createBox("world", null);
-  parent.children = [box];
+export function wrapInParent(box: Box, childName: string): Box {
+  const parent = createBox(null);
+  parent.children = [{ name: childName, box }];
   box.parent = parent;
   box.display = "window";
   box.x = 40;
@@ -126,14 +134,14 @@ export function wrapInParent(box: Box): Box {
   return parent;
 }
 
-export function addChild(parent: Box): Box {
-  const child = createBox("box", parent);
-  parent.children.push(child);
+export function addChild(parent: Box, name: string): Box {
+  const child = createBox(parent);
+  parent.children.push({ name, box: child });
   return child;
 }
 
 export function removeBox(box: Box): void {
   if (!box.parent) return;
-  box.parent.children = box.parent.children.filter((c) => c !== box);
+  box.parent.children = box.parent.children.filter((c) => c.box !== box);
   box.parent = null;
 }

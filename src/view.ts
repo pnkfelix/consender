@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import type { Box } from "./model.js";
+import { getBoxName } from "./model.js";
 import {
   canUndo,
   findBox,
@@ -48,9 +49,9 @@ const helpMap: Record<string, string> = {
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
   while (cur !== null) {
-    const cfg = cur.children.find(c => c.label === "toolbarPolicy");
+    const cfg = cur.children.find(c => c.name === "toolbarPolicy");
     if (cfg) {
-      const t = cfg.text.trim().toLowerCase();
+      const t = cfg.box.text.trim().toLowerCase();
       if (t === "focus") return "focus";
       if (t === "always") return "always";
     }
@@ -62,8 +63,8 @@ function resolveToolbarPolicy(box: Box): ToolbarPolicy {
 function updateHelpBar(): void {
   const selectedBox = selectedBoxId ? findBox(root, selectedBoxId) : null;
   const world = findBox(root, worldId);
-  const label = selectedBox?.label ?? world?.label;
-  const text = label != null ? helpMap[label] : undefined;
+  const name = selectedBox != null ? getBoxName(selectedBox) : world != null ? getBoxName(world) : "";
+  const text = helpMap[name];
   helpEl.textContent = text ?? "";
   helpEl.style.display = text != null ? "block" : "none";
 }
@@ -81,9 +82,9 @@ const rawViewBoxIds = new Set<string>();
 const KNOWN_RENDER_MODES = new Set(["svg", "markdown"]);
 
 function getBoxRenderMode(box: Box): string {
-  const renderChild = box.children.find(c => c.label.trim().toLowerCase() === "render");
+  const renderChild = box.children.find(c => c.name.trim().toLowerCase() === "render");
   if (!renderChild) return "text";
-  const mode = renderChild.text.trim().toLowerCase();
+  const mode = renderChild.box.text.trim().toLowerCase();
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
@@ -250,7 +251,7 @@ function buildWorld(box: Box): HTMLElement {
 
   const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
   if (!isRenderedWorld) {
-    for (const child of box.children) {
+    for (const { box: child } of box.children) {
       content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
     }
   }
@@ -319,7 +320,7 @@ function buildCrumb(box: Box): HTMLElement {
       el.appendChild(sep);
     }
     const span = document.createElement("span");
-    span.textContent = ancestor.label;
+    span.textContent = getBoxName(ancestor);
     if (i < path.length - 1) {
       span.className = "crumb-link";
       span.onclick = () => {
@@ -352,7 +353,7 @@ function buildIcon(box: Box): HTMLElement {
 
   const label = document.createElement("span");
   label.className = "box-icon-label";
-  label.textContent = box.label;
+  label.textContent = getBoxName(box);
   el.appendChild(label);
 
   const value = iconValueWord(box);
@@ -434,13 +435,13 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
   if (!ctx) return layer;
   ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
 
-  const regions = box.children.map(c => ({
+  const regions = box.children.map(({ name, box: c }) => ({
     x: c.x,
     y: c.y,
     w: c.display === "window" ? c.w : (() => {
         const v = iconValueWord(c);
         const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-        return Math.max(80, ctx.measureText(c.label).width + extra + 68);
+        return Math.max(80, ctx.measureText(name).width + extra + 68);
       })(),
     h: c.display === "window" ? c.h : 44,
   }));
@@ -506,14 +507,14 @@ function buildWindow(box: Box): HTMLElement {
 
   const label = document.createElement("span");
   label.className = "box-label";
-  label.textContent = box.label;
+  label.textContent = getBoxName(box);
   bar.appendChild(label);
 
   const renameBtn = document.createElement("button");
   renameBtn.title = "rename";
   renameBtn.textContent = "✎";
   renameBtn.onclick = () => {
-    const name = window.prompt("Name:", box.label);
+    const name = window.prompt("Name:", getBoxName(box));
     if (name !== null && name.trim()) {
       const result = recordOn(root, worldId, mkRenameBox(box, name.trim()));
       root = result.root;
@@ -611,7 +612,7 @@ function buildWindow(box: Box): HTMLElement {
   const isRenderedWindow = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
 
   if (!isRenderedWindow) {
-    for (const child of box.children) {
+    for (const { box: child } of box.children) {
       body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
     }
   }
@@ -937,12 +938,14 @@ function isClosedLasso(points: Pt[]): boolean {
 }
 
 function findEncircledBoxes(world: Box, polygon: Pt[], boundsFilter?: { w: number; h: number }): Box[] {
-  return world.children.filter(child => {
-    const cx = child.x + (child.display === "window" ? child.w / 2 : 60);
-    const cy = child.y + (child.display === "window" ? child.h / 2 : 22);
-    if (boundsFilter && (cx < 0 || cy < 0 || cx > boundsFilter.w || cy > boundsFilter.h)) return false;
-    return pointInPolygon(cx, cy, polygon);
-  });
+  return world.children
+    .filter(({ box: child }) => {
+      const cx = child.x + (child.display === "window" ? child.w / 2 : 60);
+      const cy = child.y + (child.display === "window" ? child.h / 2 : 22);
+      if (boundsFilter && (cx < 0 || cy < 0 || cx > boundsFilter.w || cy > boundsFilter.h)) return false;
+      return pointInPolygon(cx, cy, polygon);
+    })
+    .map(({ box }) => box);
 }
 
 function pointInPolygon(x: number, y: number, polygon: Pt[]): boolean {
