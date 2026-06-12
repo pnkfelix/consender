@@ -2,11 +2,27 @@ export type DisplayMode = "icon" | "window";
 
 export interface PositionRecord { id: string; x: number; y: number }
 
+export interface Line {
+  id: string;
+  text: string;
+}
+
+export interface SerializedLine {
+  id: string;
+  text: string;
+}
+
+export type LineOp =
+  | { kind: "InsertLine"; afterId: string | null; newId: string; text: string }
+  | { kind: "DeleteLine"; id: string; prevText: string; prevAfterId: string | null }
+  | { kind: "EditLine";   id: string; newText: string; prevText: string };
+
 export type Op =
   | { kind: "MoveBox";          id: string; x: number; y: number; prevX: number; prevY: number }
   | { kind: "ResizeBox";        id: string; w: number; h: number; prevW: number; prevH: number }
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
-  | { kind: "SetBoxText";       id: string; text: string; prevText: string }
+  | { kind: "SetBoxText";       id: string; text: string; prevText: string }  // legacy: kept for old undo stacks
+  | { kind: "EditText";         boxId: string; prevLines: SerializedLine[]; newLines: SerializedLine[]; lineOps: LineOp[] }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
   | { kind: "AddBox";           parentId: string; index: number; subtree: OpSubtree }
   | { kind: "RemoveBox";        parentId: string; index: number; subtree: OpSubtree }
@@ -58,7 +74,8 @@ export interface SerializedBox {
   y: number;
   w: number;
   h: number;
-  text?: string;
+  text?: string;    // legacy: present in old stored data, used for migration
+  lines?: SerializedLine[];
 }
 
 export type Guard =
@@ -76,7 +93,8 @@ export interface Box {
   y: number;
   w: number;
   h: number;
-  text: string;
+  text: string;   // kept in sync with lines; use for display and structural ops
+  lines: Line[];  // authoritative for line-level editing
   undoStack: StackEntry[];
   redoStack: StackEntry[];
 }
@@ -107,6 +125,7 @@ export function createBox(label: string, parent: Box | null): Box {
     w: 180,
     h: 130,
     text: "",
+    lines: [],
     undoStack: [],
     redoStack: [],
   };
