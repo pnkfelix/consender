@@ -322,6 +322,14 @@ function buildCrumb(box: Box): HTMLElement {
   return el;
 }
 
+// Returns the single-word text value for icon display, or null if not applicable.
+// Only applies when box has no children and its text is exactly one non-whitespace word.
+function iconValueWord(box: Box): string | null {
+  const trimmed = box.text.trim();
+  if (trimmed.length === 0 || /\s/.test(trimmed) || box.children.length > 0) return null;
+  return trimmed;
+}
+
 function buildIcon(box: Box): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-icon";
@@ -329,8 +337,21 @@ function buildIcon(box: Box): HTMLElement {
   el.style.top = `${box.y}px`;
 
   const label = document.createElement("span");
+  label.className = "box-icon-label";
   label.textContent = box.label;
   el.appendChild(label);
+
+  const value = iconValueWord(box);
+  if (value !== null) {
+    const sep = document.createElement("span");
+    sep.className = "box-icon-sep";
+    sep.textContent = ":";
+    el.appendChild(sep);
+    const valueSpan = document.createElement("span");
+    valueSpan.className = "box-icon-value";
+    valueSpan.textContent = value;
+    el.appendChild(valueSpan);
+  }
 
   const expandBtn = document.createElement("button");
   expandBtn.title = "expand";
@@ -402,7 +423,11 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
   const regions = box.children.map(c => ({
     x: c.x,
     y: c.y,
-    w: c.display === "window" ? c.w : Math.max(80, ctx.measureText(c.label).width + 68),
+    w: c.display === "window" ? c.w : (() => {
+        const v = iconValueWord(c);
+        const extra = v !== null ? ctx.measureText(": " + v).width : 0;
+        return Math.max(80, ctx.measureText(c.label).width + extra + 68);
+      })(),
     h: c.display === "window" ? c.h : 44,
   }));
 

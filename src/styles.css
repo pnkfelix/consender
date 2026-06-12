@@ -191,6 +191,10 @@ html, body, #app {
 
 .box-icon:active { cursor: grabbing; }
 
+.box-icon-label { opacity: 0.65; }
+.box-icon-sep   { opacity: 0.4; margin: 0 1px; }
+.box-icon-value { font-style: italic; }
+
 .box-icon button {
   font-size: 13px;
   min-height: 32px;
