@@ -202,29 +202,33 @@ function buildWorld(box: Box): HTMLElement {
   };
   bar.appendChild(outBtn);
 
-  const undoBtn = document.createElement("button");
-  undoBtn.title = "undo";
-  undoBtn.textContent = "↩";
-  undoBtn.disabled = !canUndo(box, root);
-  undoBtn.onclick = () => {
-    const result = undoBox(box, root, worldId);
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(undoBtn);
+  const isRawMode = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
 
-  const redoBtn = document.createElement("button");
-  redoBtn.title = "redo";
-  redoBtn.textContent = "↪";
-  redoBtn.disabled = box.redoStack.length === 0;
-  redoBtn.onclick = () => {
-    const result = redoBox(box, root, worldId);
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(redoBtn);
+  if (isRawMode) {
+    const undoBtn = document.createElement("button");
+    undoBtn.title = "undo";
+    undoBtn.textContent = "↩";
+    undoBtn.disabled = !canUndo(box, root);
+    undoBtn.onclick = () => {
+      const result = undoBox(box, root, worldId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(undoBtn);
+
+    const redoBtn = document.createElement("button");
+    redoBtn.title = "redo";
+    redoBtn.textContent = "↪";
+    redoBtn.disabled = box.redoStack.length === 0;
+    redoBtn.onclick = () => {
+      const result = redoBox(box, root, worldId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(redoBtn);
+  }
 
   const textBtn = document.createElement("button");
   textBtn.title = "edit text";
@@ -544,29 +548,33 @@ function buildWindow(box: Box): HTMLElement {
   };
   bar.appendChild(fullBtn);
 
-  const undoBtn = document.createElement("button");
-  undoBtn.title = "undo";
-  undoBtn.textContent = "↩";
-  undoBtn.disabled = !canUndo(box, root);
-  undoBtn.onclick = () => {
-    const result = undoBox(box, root, worldId);
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(undoBtn);
+  const isRawModeW = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
 
-  const redoBtn = document.createElement("button");
-  redoBtn.title = "redo";
-  redoBtn.textContent = "↪";
-  redoBtn.disabled = box.redoStack.length === 0;
-  redoBtn.onclick = () => {
-    const result = redoBox(box, root, worldId);
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(redoBtn);
+  if (isRawModeW) {
+    const undoBtn = document.createElement("button");
+    undoBtn.title = "undo";
+    undoBtn.textContent = "↩";
+    undoBtn.disabled = !canUndo(box, root);
+    undoBtn.onclick = () => {
+      const result = undoBox(box, root, worldId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(undoBtn);
+
+    const redoBtn = document.createElement("button");
+    redoBtn.title = "redo";
+    redoBtn.textContent = "↪";
+    redoBtn.disabled = box.redoStack.length === 0;
+    redoBtn.onclick = () => {
+      const result = redoBox(box, root, worldId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(redoBtn);
+  }
 
   const textBtn = document.createElement("button");
   textBtn.title = "edit text";
