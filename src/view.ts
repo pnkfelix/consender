@@ -35,19 +35,10 @@ const helpMap: Record<string, string> = {
   "render": "Child-box property: sets the rendering mode for its parent box. " +
     "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup. " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
-  "help": "consender: infinite canvas of nested boxes. " +
-    "'+ box' creates a child; drag the title bar to move; resize from the bottom-right corner. " +
-    "⛶ zooms into a box; 'zoom out' goes up to the parent (or wraps in a new one at the root). " +
-    "Draw a closed lasso loop in empty space to group boxes into a new parent. " +
-    "Each box has its own undo/redo stack (↩ ↪). " +
-    "Label child boxes with built-in names to configure behavior — zoom into a builtinLabels box for a full list.",
-  "builtinLabels": "Built-in labels: " +
-    "world (root box and wrap-parent boxes created by zoom-out at root); " +
-    "box (default label for new child boxes); " +
-    "group (label assigned to boxes created by the lasso-grouping gesture); " +
-    "toolbarPolicy (child box — text \"focus\" or \"always\" controls sibling toolbar visibility); " +
-    "render (child box — text \"svg\" renders the parent box's text as SVG markup). " +
-    "Name any box with one of these labels to see its help text in this bar.",
+  "help": "consender: an infinite canvas of nested boxes. " +
+    "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
+    "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
+  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
