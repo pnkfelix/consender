@@ -108,12 +108,15 @@ jobs:
 
       - name: Post preview comment
         if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'preview'
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         uses: actions/github-script@v7
         with:
           script: |
             const marker = '<!-- preview-url -->';
             const pr = context.payload.pull_request.number;
-            const url = `https://pnkfelix.github.io/consender/preview/pr-${pr}/`;
+            const base = process.env.PAGE_URL.replace(/\/$/, '');
+            const url = `${base}/preview/pr-${pr}/`;
             const body = `${marker}\n👁 Preview: ${url}`;
 
             const { data: comments } = await github.rest.issues.listComments({
