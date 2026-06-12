@@ -55,12 +55,17 @@ jobs:
           while IFS=" " read -r number ref; do
             [ -z "$number" ] && continue
             echo "::group::PR #${number} (${ref})"
-            git fetch origin "refs/heads/${ref}"
-            git checkout FETCH_HEAD -- .
-            npx vite build --base="/consender/preview/pr-${number}/"
-            mkdir -p "combined/preview/pr-${number}"
-            cp -r dist/. "combined/preview/pr-${number}/"
+            if git fetch origin "refs/heads/${ref}" \
+               && git checkout FETCH_HEAD -- . \
+               && npm install --silent \
+               && npx vite build --base="/consender/preview/pr-${number}/"; then
+              mkdir -p "combined/preview/pr-${number}"
+              cp -r dist/. "combined/preview/pr-${number}/"
+            else
+              echo "::warning::PR #${number} preview build failed — skipping"
+            fi
             git checkout origin/main -- .
+            npm install --silent
             echo "::endgroup::"
           done <<< "$prs_lines"
 
