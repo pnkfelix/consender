@@ -1,3 +1,4 @@
+import { marked } from "marked";
 import type { Box } from "./model.js";
 import {
   canUndo,
@@ -33,7 +34,8 @@ const helpMap: Record<string, string> = {
     "Text: \"focus\" hides buttons until a box is tapped; \"always\" keeps them visible. " +
     "Place inside a parent to configure all its children. Walks up the tree if not found.",
   "render": "Child-box property: sets the rendering mode for its parent box. " +
-    "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup. " +
+    "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup; " +
+    "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
@@ -76,7 +78,7 @@ function updateSelection(): void {
 // Boxes in this set are showing raw source even when a render mode is active.
 const rawViewBoxIds = new Set<string>();
 
-const KNOWN_RENDER_MODES = new Set(["svg"]);
+const KNOWN_RENDER_MODES = new Set(["svg", "markdown"]);
 
 function getBoxRenderMode(box: Box): string {
   const renderChild = box.children.find(c => c.label.trim().toLowerCase() === "render");
@@ -90,6 +92,18 @@ function buildSvgLayer(box: Box): HTMLElement {
   layer.className = "box-svg-layer";
   layer.innerHTML = box.text;
   return layer;
+}
+
+function buildMarkdownLayer(box: Box): HTMLElement {
+  const layer = document.createElement("div");
+  layer.className = "box-markdown-layer";
+  layer.innerHTML = marked.parse(box.text) as string;
+  return layer;
+}
+
+function buildRenderLayer(box: Box): HTMLElement {
+  const mode = getBoxRenderMode(box);
+  return mode === "markdown" ? buildMarkdownLayer(box) : buildSvgLayer(box);
 }
 
 function buildRenderToggleBtn(box: Box): HTMLButtonElement | null {
@@ -243,7 +257,7 @@ function buildWorld(box: Box): HTMLElement {
   makeLassoGesture(content, box);
   if (box.text) {
     if (isRenderedWorld) {
-      content.insertBefore(buildSvgLayer(box), content.firstChild);
+      content.insertBefore(buildRenderLayer(box), content.firstChild);
     } else {
       const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
       tl.dataset.worldTextLayer = "1";
@@ -602,7 +616,7 @@ function buildWindow(box: Box): HTMLElement {
     }
   }
   if (box.text) {
-    const layer = isRenderedWindow ? buildSvgLayer(box) : buildTextLayer(box);
+    const layer = isRenderedWindow ? buildRenderLayer(box) : buildTextLayer(box);
     if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
     body.insertBefore(layer, body.firstChild);
   }
