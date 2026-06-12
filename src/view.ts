@@ -603,8 +603,11 @@ function buildWindow(box: Box): HTMLElement {
   }
   if (box.text) {
     const layer = isRenderedWindow ? buildSvgLayer(box) : buildTextLayer(box);
+    if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
     body.insertBefore(layer, body.firstChild);
   }
+  body.style.touchAction = "none";
+  makeLassoGesture(body, box);
 
   textBtn.onclick = () => {
     const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
