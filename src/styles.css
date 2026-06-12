@@ -238,6 +238,93 @@ html, body, #app {
   pointer-events: auto;
 }
 
+.box-markdown-layer {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: inherit;
+}
+
+.box-markdown-layer h1,
+.box-markdown-layer h2,
+.box-markdown-layer h3,
+.box-markdown-layer h4,
+.box-markdown-layer h5,
+.box-markdown-layer h6 {
+  margin: 0.6em 0 0.3em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.box-markdown-layer h1 { font-size: 1.4em; }
+.box-markdown-layer h2 { font-size: 1.2em; }
+.box-markdown-layer h3 { font-size: 1.05em; }
+
+.box-markdown-layer p { margin: 0 0 0.6em; }
+.box-markdown-layer p:last-child { margin-bottom: 0; }
+
+.box-markdown-layer ul,
+.box-markdown-layer ol {
+  margin: 0 0 0.6em 1.4em;
+  padding: 0;
+}
+
+.box-markdown-layer li { margin: 0.15em 0; }
+
+.box-markdown-layer code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(128, 128, 128, 0.15);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+.box-markdown-layer pre {
+  margin: 0 0 0.6em;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: 4px;
+  padding: 0.5em 0.7em;
+  overflow-x: auto;
+}
+
+.box-markdown-layer pre code {
+  background: none;
+  padding: 0;
+}
+
+.box-markdown-layer blockquote {
+  margin: 0 0 0.6em;
+  padding-left: 0.75em;
+  border-left: 3px solid rgba(128, 128, 128, 0.4);
+  color: rgba(128, 128, 128, 0.85);
+}
+
+.box-markdown-layer a { color: #4a9eda; }
+
+.box-markdown-layer hr {
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  margin: 0.6em 0;
+}
+
+.box-markdown-layer table {
+  border-collapse: collapse;
+  margin: 0 0 0.6em;
+  font-size: 0.95em;
+}
+
+.box-markdown-layer th,
+.box-markdown-layer td {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  padding: 0.25em 0.5em;
+}
+
+.box-markdown-layer th { font-weight: 600; background: rgba(128, 128, 128, 0.1); }
+
 .box-btn-rendering {
   background: #1a3d5c !important;
   color: #8cc8f0 !important;
