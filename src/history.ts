@@ -1,10 +1,11 @@
 import {
   createRoot,
   freshId,
+  getBoxName,
   getNextId,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Guard, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
+import type { Box, DisplayMode, Guard, NamedChild, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
 
 export type { Guard, Op, OpSubtree, SerializedBox, StackEntry };
 
@@ -47,7 +48,7 @@ interface PersistedState {
 
 export function findBox(root: Box, id: string): Box | null {
   if (root.id === id) return root;
-  for (const child of root.children) {
+  for (const { box: child } of root.children) {
     const found = findBox(child, id);
     if (found) return found;
   }
@@ -57,9 +58,8 @@ export function findBox(root: Box, id: string): Box | null {
 function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
   acc[box.id] = {
     id: box.id,
-    label: box.label,
     display: box.display,
-    childIds: box.children.map((c) => c.id),
+    children: box.children.map(({ name, box: c }) => ({ id: c.id, name })),
     parentId: box.parent ? box.parent.id : null,
     x: box.x,
     y: box.y,
@@ -67,7 +67,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
     h: box.h,
     text: box.text || undefined,
   };
-  for (const child of box.children) {
+  for (const { box: child } of box.children) {
     collectSubtree(child, acc);
   }
 }
@@ -78,13 +78,28 @@ export function serializeOpSubtree(box: Box): OpSubtree {
   return { rootId: box.id, boxes };
 }
 
+function deserializeChildren(
+  s: SerializedBox,
+  allBoxes: Record<string, SerializedBox>,
+  live: Record<string, Box>
+): NamedChild[] {
+  const raw = s as any;
+  if (raw.childIds) {
+    // old format: names were on the child boxes themselves
+    return (raw.childIds as string[]).map((cid: string) => ({
+      name: (allBoxes[cid] as any)?.label ?? "box",
+      box: live[cid],
+    }));
+  }
+  return s.children.map(c => ({ name: c.name, box: live[c.id] }));
+}
+
 export function deserializeOpSubtree(subtree: OpSubtree): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(subtree.boxes)) {
     const s = subtree.boxes[id];
     live[id] = {
       id: s.id,
-      label: s.label,
       display: s.display,
       children: [],
       parent: null,
@@ -100,7 +115,7 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
   for (const id of Object.keys(subtree.boxes)) {
     const s = subtree.boxes[id];
     const box = live[id];
-    box.children = s.childIds.map((cid) => live[cid]);
+    box.children = deserializeChildren(s, subtree.boxes, live);
     box.parent = s.parentId ? live[s.parentId] : null;
   }
   return live[subtree.rootId];
@@ -112,9 +127,8 @@ function collectPersistedSubtree(
 ): void {
   acc[box.id] = {
     id: box.id,
-    label: box.label,
     display: box.display,
-    childIds: box.children.map((c) => c.id),
+    children: box.children.map(({ name, box: c }) => ({ id: c.id, name })),
     parentId: box.parent ? box.parent.id : null,
     x: box.x,
     y: box.y,
@@ -124,7 +138,7 @@ function collectPersistedSubtree(
     undoStack: box.undoStack,
     redoStack: box.redoStack,
   };
-  for (const child of box.children) {
+  for (const { box: child } of box.children) {
     collectPersistedSubtree(child, acc);
   }
 }
@@ -138,7 +152,23 @@ export function serializeFullTree(
 }
 
 function migrateStackEntries(raw: any[]): StackEntry[] {
-  return raw.map(e => ('op' in e ? e as StackEntry : { op: e as Op }));
+  return raw.map(e => {
+    const entry: StackEntry = 'op' in e ? e as StackEntry : { op: e as Op };
+    const op = entry.op as any;
+    if ((op.kind === "AddBox" || op.kind === "RemoveBox") && op.name === undefined) {
+      op.name = "box";
+    }
+    if ((op.kind === "WrapInParent" || op.kind === "UnwrapFromParent") && op.childName === undefined) {
+      op.childName = "box";
+    }
+    if ((op.kind === "GroupBoxes" || op.kind === "UngroupBoxes") && op.groupName === undefined) {
+      op.groupName = "group";
+    }
+    if ((op.kind === "CollapseBox" || op.kind === "UncollapseBox") && op.boxName === undefined) {
+      op.boxName = "box";
+    }
+    return entry;
+  });
 }
 
 export function deserializeFullTree(data: PersistedState["tree"]): Box {
@@ -147,7 +177,6 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
     const s = data.boxes[id];
     live[id] = {
       id: s.id,
-      label: s.label,
       display: s.display,
       children: [],
       parent: null,
@@ -163,7 +192,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
   for (const id of Object.keys(data.boxes)) {
     const s = data.boxes[id];
     const box = live[id];
-    box.children = s.childIds.map((cid) => live[cid]);
+    box.children = deserializeChildren(s, data.boxes, live);
     box.parent = s.parentId ? live[s.parentId] : null;
   }
   return live[data.rootId];
@@ -182,13 +211,13 @@ export function invertOp(op: Op): Op {
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
     case "AddBox":
-      return { kind: "RemoveBox", parentId: op.parentId, index: op.index, subtree: op.subtree };
+      return { kind: "RemoveBox", parentId: op.parentId, index: op.index, name: op.name, subtree: op.subtree };
     case "RemoveBox":
-      return { kind: "AddBox", parentId: op.parentId, index: op.index, subtree: op.subtree };
+      return { kind: "AddBox", parentId: op.parentId, index: op.index, name: op.name, subtree: op.subtree };
     case "WrapInParent":
-      return { kind: "UnwrapFromParent", wrapperId: op.wrapperId, childId: op.childId, prevX: op.prevX, prevY: op.prevY };
+      return { kind: "UnwrapFromParent", wrapperId: op.wrapperId, childId: op.childId, childName: op.childName, prevX: op.prevX, prevY: op.prevY };
     case "UnwrapFromParent":
-      return { kind: "WrapInParent", wrapperId: op.wrapperId, childId: op.childId, prevX: op.prevX, prevY: op.prevY };
+      return { kind: "WrapInParent", wrapperId: op.wrapperId, childId: op.childId, childName: op.childName, prevX: op.prevX, prevY: op.prevY };
     case "GroupBoxes":
       return { ...op, kind: "UngroupBoxes" };
     case "UngroupBoxes":
@@ -218,7 +247,10 @@ export function applyOp(
     }
     case "RenameBox": {
       const box = findBox(root, op.id);
-      if (box) { box.label = op.label; }
+      if (box?.parent) {
+        const nc = box.parent.children.find(c => c.box === box);
+        if (nc) nc.name = op.label;
+      }
       return { root, worldId };
     }
     case "SetBoxText": {
@@ -236,18 +268,18 @@ export function applyOp(
       if (!parent) return { root, worldId };
       const newBox = deserializeOpSubtree(op.subtree);
       newBox.parent = parent;
-      parent.children.splice(op.index, 0, newBox);
+      parent.children.splice(op.index, 0, { name: op.name, box: newBox });
       return { root, worldId };
     }
     case "RemoveBox": {
       const parent = findBox(root, op.parentId);
       if (!parent) return { root, worldId };
-      const removed = parent.children[op.index];
-      if (!removed) return { root, worldId };
+      const nc = parent.children[op.index];
+      if (!nc) return { root, worldId };
       parent.children.splice(op.index, 1);
-      removed.parent = null;
+      nc.box.parent = null;
       let newWorldId = worldId;
-      if (findBox(removed, worldId)) {
+      if (findBox(nc.box, worldId)) {
         newWorldId = parent.id;
       }
       return { root, worldId: newWorldId };
@@ -255,11 +287,10 @@ export function applyOp(
     case "WrapInParent": {
       const child = findBox(root, op.childId);
       if (!child) return { root, worldId };
-      const wrapper = {
+      const wrapper: Box = {
         id: op.wrapperId,
-        label: "world",
         display: "window" as DisplayMode,
-        children: [child],
+        children: [{ name: op.childName, box: child }],
         parent: null,
         x: 0,
         y: 0,
@@ -295,12 +326,11 @@ export function applyOp(
     case "GroupBoxes": {
       const world = findBox(root, op.worldId);
       if (!world) return { root, worldId };
-      const childMap = new Map(world.children.map(c => [c.id, c]));
-      const toGroup = op.childIds.map(id => childMap.get(id)).filter((b): b is Box => b !== undefined);
+      const childNcMap = new Map(world.children.map(nc => [nc.box.id, nc]));
+      const toGroup = op.childIds.map(id => childNcMap.get(id)).filter((nc): nc is NamedChild => nc !== undefined);
       if (toGroup.length !== op.childIds.length) return { root, worldId };
       const group: Box = {
         id: op.groupId,
-        label: "group",
         display: "window",
         children: [],
         parent: world,
@@ -312,27 +342,29 @@ export function applyOp(
         undoStack: [],
         redoStack: [],
       };
-      for (const child of toGroup) {
+      for (const nc of toGroup) {
+        const child = nc.box;
         const newPos = op.newPositions.find(p => p.id === child.id)!;
         child.x = newPos.x;
         child.y = newPos.y;
         child.parent = group;
-        group.children.push(child);
+        group.children.push({ name: nc.name, box: child });
       }
       if (op.groupText !== undefined) {
         world.text = op.worldNewText ?? world.text;
         group.text = op.groupText;
       }
-      world.children = world.children.filter(c => !op.childIds.includes(c.id));
-      world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, group);
+      world.children = world.children.filter(c => !op.childIds.includes(c.box.id));
+      world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, { name: op.groupName, box: group });
       return { root, worldId };
     }
     case "UngroupBoxes": {
       const world = findBox(root, op.worldId);
       if (!world) return { root, worldId };
-      const groupIdx = world.children.findIndex(c => c.id === op.groupId);
+      const groupIdx = world.children.findIndex(c => c.box.id === op.groupId);
       if (groupIdx === -1) return { root, worldId };
-      const [group] = world.children.splice(groupIdx, 1);
+      const [groupNc] = world.children.splice(groupIdx, 1);
+      const group = groupNc.box;
       const restorations = op.childIds
         .map((id, i) => ({
           id,
@@ -341,12 +373,13 @@ export function applyOp(
         }))
         .sort((a, b) => a.index - b.index);
       for (const r of restorations) {
-        const child = group.children.find(c => c.id === r.id);
-        if (!child) continue;
+        const nc = group.children.find(c => c.box.id === r.id);
+        if (!nc) continue;
+        const child = nc.box;
         child.x = r.prevPos.x;
         child.y = r.prevPos.y;
         child.parent = world;
-        world.children.splice(r.index, 0, child);
+        world.children.splice(r.index, 0, { name: nc.name, box: child });
       }
       if (op.worldPrevText !== undefined) {
         world.text = op.worldPrevText;
@@ -361,13 +394,14 @@ export function applyOp(
       if (!parent || !box) return { root, worldId };
       parent.children.splice(op.boxIndex, 1);
       for (let i = 0; i < op.childIds.length; i++) {
-        const child = box.children.find(c => c.id === op.childIds[i]);
-        if (!child) continue;
+        const nc = box.children.find(c => c.box.id === op.childIds[i]);
+        if (!nc) continue;
+        const child = nc.box;
         const newPos = op.newPositions.find(p => p.id === child.id)!;
         child.x = newPos.x;
         child.y = newPos.y;
         child.parent = parent;
-        parent.children.splice(op.boxIndex + i, 0, child);
+        parent.children.splice(op.boxIndex + i, 0, { name: nc.name, box: child });
       }
       parent.text = op.parentNewText;
       let newWorldId = worldId;
@@ -378,13 +412,12 @@ export function applyOp(
       const parent = findBox(root, op.parentId);
       if (!parent) return { root, worldId };
       const childrenToMove = op.childIds
-        .map(id => parent.children.find(c => c.id === id))
-        .filter((c): c is Box => c !== undefined);
-      parent.children = parent.children.filter(c => !op.childIds.includes(c.id));
+        .map(id => parent.children.find(c => c.box.id === id))
+        .filter((nc): nc is NamedChild => nc !== undefined);
+      parent.children = parent.children.filter(c => !op.childIds.includes(c.box.id));
       const sBox = op.subtree.boxes[op.boxId];
       const box: Box = {
         id: sBox.id,
-        label: sBox.label,
         display: sBox.display,
         children: [],
         parent: parent,
@@ -396,14 +429,15 @@ export function applyOp(
         undoStack: [],
         redoStack: [],
       };
-      for (const child of childrenToMove) {
+      for (const nc of childrenToMove) {
+        const child = nc.box;
         const prevPos = op.prevPositions.find(p => p.id === child.id)!;
         child.x = prevPos.x;
         child.y = prevPos.y;
         child.parent = box;
-        box.children.push(child);
+        box.children.push({ name: nc.name, box: child });
       }
-      parent.children.splice(op.boxIndex, 0, box);
+      parent.children.splice(op.boxIndex, 0, { name: op.boxName, box });
       parent.text = op.parentPrevText;
       return { root, worldId };
     }
@@ -442,7 +476,7 @@ function evaluateGuard(guard: Guard, root: Box): boolean {
       if (!wrapper) return true;
       return (
         wrapper.children.length === 1 &&
-        wrapper.children[0].id === guard.childId &&
+        wrapper.children[0].box.id === guard.childId &&
         wrapper.undoStack.length === 0
       );
     }
@@ -570,7 +604,7 @@ export function mkRenameBox(
   box: Box,
   newLabel: string
 ): Op {
-  return { kind: "RenameBox", id: box.id, label: newLabel, prevLabel: box.label };
+  return { kind: "RenameBox", id: box.id, label: newLabel, prevLabel: getBoxName(box) };
 }
 
 export function mkSetDisplay(
@@ -619,7 +653,7 @@ function freshBoxPosition(
   pw: number,
   ph: number
 ): { x: number; y: number } {
-  const kids = parent.children;
+  const kids = parent.children.map(nc => nc.box);
 
   if (kids.length >= 2) {
     const last = kids[kids.length - 1];
@@ -644,9 +678,8 @@ export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
   const { x, y } = freshBoxPosition(parent, pw, ph);
   const serialized: SerializedBox = {
     id,
-    label: "box",
     display: "window",
-    childIds: [],
+    children: [],
     parentId: parent.id,
     x,
     y,
@@ -661,17 +694,19 @@ export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
     kind: "AddBox",
     parentId: parent.id,
     index: parent.children.length,
+    name: "box",
     subtree,
   };
 }
 
 export function mkRemoveBox(box: Box): Op {
   if (!box.parent) throw new Error("Cannot remove root box");
-  const index = box.parent.children.indexOf(box);
+  const index = box.parent.children.findIndex(c => c.box === box);
   return {
     kind: "RemoveBox",
     parentId: box.parent.id,
     index,
+    name: getBoxName(box),
     subtree: serializeOpSubtree(box),
   };
 }
@@ -679,13 +714,13 @@ export function mkRemoveBox(box: Box): Op {
 export function mkCollapseBox(box: Box): Op {
   if (!box.parent) throw new Error("Cannot collapse root box");
   const parent = box.parent;
-  const boxIndex = parent.children.indexOf(box);
-  const childIds = box.children.map(c => c.id);
-  const prevPositions: PositionRecord[] = box.children.map(c => ({ id: c.id, x: c.x, y: c.y }));
-  const newPositions: PositionRecord[] = box.children.map(c => ({
-    id: c.id,
-    x: box.x + c.x,
-    y: box.y + BAR_H + c.y,
+  const boxIndex = parent.children.findIndex(c => c.box === box);
+  const childIds = box.children.map(nc => nc.box.id);
+  const prevPositions: PositionRecord[] = box.children.map(nc => ({ id: nc.box.id, x: nc.box.x, y: nc.box.y }));
+  const newPositions: PositionRecord[] = box.children.map(nc => ({
+    id: nc.box.id,
+    x: box.x + nc.box.x,
+    y: box.y + BAR_H + nc.box.y,
   }));
   const parentNewText = box.text
     ? (parent.text ? parent.text + " " + box.text : box.text)
@@ -695,6 +730,7 @@ export function mkCollapseBox(box: Box): Op {
     boxId: box.id,
     parentId: parent.id,
     boxIndex,
+    boxName: getBoxName(box),
     subtree: serializeOpSubtree(box),
     childIds,
     prevPositions,
@@ -710,6 +746,7 @@ export function mkWrapInParent(box: Box): Op {
     kind: "WrapInParent",
     wrapperId,
     childId: box.id,
+    childName: getBoxName(box),
     prevX: box.x,
     prevY: box.y,
   };
@@ -746,7 +783,7 @@ export function mkGroupBoxes(world: Box, toGroup: Box[], groupText = "", worldNe
 
   const groupId = freshId();
   const childIds = toGroup.map(b => b.id);
-  const childIndices = toGroup.map(b => world.children.indexOf(b));
+  const childIndices = toGroup.map(b => world.children.findIndex(nc => nc.box === b));
   const prevPositions: PositionRecord[] = toGroup.map(b => ({ id: b.id, x: b.x, y: b.y }));
   const newPositions: PositionRecord[] = toGroup.map(b => ({
     id: b.id,
@@ -758,6 +795,7 @@ export function mkGroupBoxes(world: Box, toGroup: Box[], groupText = "", worldNe
     kind: "GroupBoxes",
     worldId: world.id,
     groupId,
+    groupName: "group",
     childIds,
     childIndices,
     prevPositions,
