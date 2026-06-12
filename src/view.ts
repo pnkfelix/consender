@@ -603,8 +603,11 @@ function buildWindow(box: Box): HTMLElement {
   }
   if (box.text) {
     const layer = isRenderedWindow ? buildSvgLayer(box) : buildTextLayer(box);
+    if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
     body.insertBefore(layer, body.firstChild);
   }
+  body.style.touchAction = "none";
+  makeLassoGesture(body, box, true);
 
   textBtn.onclick = () => {
     const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
@@ -793,7 +796,7 @@ function computeTextMigration(
 
 type Pt = { x: number; y: number };
 
-function makeLassoGesture(content: HTMLElement, world: Box): void {
+function makeLassoGesture(content: HTMLElement, world: Box, constrainToContent = false): void {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.style.cssText =
     "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden;z-index:1000;";
@@ -837,10 +840,11 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     const rect = content.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    if (x < 0 || y < 0 || x > rect.width || y > rect.height) cancelled = true;
+    if (!constrainToContent && (x < 0 || y < 0 || x > rect.width || y > rect.height)) cancelled = true;
     points.push({ x, y });
     setPath(pathEl, points, false);
-    updateGhostBox(ghostEl, world, points, cancelled);
+    const bf = constrainToContent ? { w: content.clientWidth, h: content.clientHeight } : undefined;
+    updateGhostBox(ghostEl, world, points, cancelled, bf);
   });
 
   content.addEventListener("pointerup", (e: PointerEvent) => {
@@ -852,7 +856,8 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     ghostEl.setAttribute("visibility", "hidden");
 
     if (!cancelled && isClosedLasso(points)) {
-      const encircled = findEncircledBoxes(world, points);
+      const bf = constrainToContent ? { w: content.clientWidth, h: content.clientHeight } : undefined;
+      const encircled = findEncircledBoxes(world, points, bf);
       const { groupText, worldNewText } = computeTextMigration(content, points, world.text);
       const xs = points.map(p => p.x);
       const ys = points.map(p => p.y);
@@ -860,7 +865,19 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
         x: (Math.min(...xs) + Math.max(...xs)) / 2,
         y: (Math.min(...ys) + Math.max(...ys)) / 2,
       };
-      const op = mkGroupBoxes(world, encircled, groupText, worldNewText, center);
+      let op = mkGroupBoxes(world, encircled, groupText, worldNewText, center);
+      if (constrainToContent && op.kind === "GroupBoxes") {
+        const bw = content.clientWidth;
+        const bh = content.clientHeight;
+        const clampedX = Math.max(0, Math.min(op.groupX, bw - op.groupW));
+        const clampedY = Math.max(0, Math.min(op.groupY, bh - op.groupH));
+        const dx = clampedX - op.groupX;
+        const dy = clampedY - op.groupY;
+        if (dx !== 0 || dy !== 0) {
+          op = { ...op, groupX: clampedX, groupY: clampedY,
+                 newPositions: op.newPositions.map(p => ({ ...p, x: p.x - dx, y: p.y - dy })) };
+        }
+      }
       const result = recordOn(root, worldId, op);
       root = result.root;
       worldId = result.worldId;
@@ -905,10 +922,11 @@ function isClosedLasso(points: Pt[]): boolean {
   return Math.sqrt(dx * dx + dy * dy) < 60;
 }
 
-function findEncircledBoxes(world: Box, polygon: Pt[]): Box[] {
+function findEncircledBoxes(world: Box, polygon: Pt[], boundsFilter?: { w: number; h: number }): Box[] {
   return world.children.filter(child => {
     const cx = child.x + (child.display === "window" ? child.w / 2 : 60);
     const cy = child.y + (child.display === "window" ? child.h / 2 : 22);
+    if (boundsFilter && (cx < 0 || cy < 0 || cx > boundsFilter.w || cy > boundsFilter.h)) return false;
     return pointInPolygon(cx, cy, polygon);
   });
 }
@@ -925,8 +943,8 @@ function pointInPolygon(x: number, y: number, polygon: Pt[]): boolean {
   return inside;
 }
 
-function computePreviewRect(world: Box, points: Pt[]): { x: number; y: number; w: number; h: number } {
-  const encircled = findEncircledBoxes(world, points);
+function computePreviewRect(world: Box, points: Pt[], boundsFilter?: { w: number; h: number }): { x: number; y: number; w: number; h: number } {
+  const encircled = findEncircledBoxes(world, points, boundsFilter);
   const PADDING = 20;
   if (encircled.length > 0) {
     const minX = Math.min(...encircled.map(b => b.x));
@@ -949,9 +967,9 @@ function computePreviewRect(world: Box, points: Pt[]): { x: number; y: number; w
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
-function updateGhostBox(ghostEl: SVGRectElement, world: Box, points: Pt[], cancelled: boolean): void {
+function updateGhostBox(ghostEl: SVGRectElement, world: Box, points: Pt[], cancelled: boolean, boundsFilter?: { w: number; h: number }): void {
   if (!cancelled && isClosedLasso(points)) {
-    const r = computePreviewRect(world, points);
+    const r = computePreviewRect(world, points, boundsFilter);
     ghostEl.setAttribute("x", String(r.x));
     ghostEl.setAttribute("y", String(r.y));
     ghostEl.setAttribute("width", String(r.w));
