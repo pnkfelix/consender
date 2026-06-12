@@ -100,7 +100,7 @@ html, body, #app {
 .box-window-bar button:hover { background: #fff; }
 
 /* Focus policy: hide buttons unless the box is selected */
-.box-window[data-toolbar-policy="focus"]:not(.box-selected) .box-window-bar button {
+.box-window[data-toolbar-policy="focus"]:not(.box-selected) > .box-window-bar button {
   display: none;
 }
 
