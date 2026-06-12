@@ -32,6 +32,13 @@ const helpMap: Record<string, string> = {
   "toolbarPolicy": "Controls toolbar visibility for sibling boxes. " +
     "Text: \"focus\" hides buttons until a box is tapped; \"always\" keeps them visible. " +
     "Place inside a parent to configure all its children. Walks up the tree if not found.",
+  "render": "Child-box property: sets the rendering mode for its parent box. " +
+    "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup. " +
+    "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
+  "help": "consender: an infinite canvas of nested boxes. " +
+    "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
+    "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
+  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
