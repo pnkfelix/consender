@@ -716,6 +716,15 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
   pathEl.setAttribute("stroke-linecap", "round");
   svg.appendChild(pathEl);
 
+  const ghostEl = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  ghostEl.setAttribute("fill", "rgba(80,130,255,0.06)");
+  ghostEl.setAttribute("stroke", "rgba(80,130,255,0.55)");
+  ghostEl.setAttribute("stroke-width", "1.5");
+  ghostEl.setAttribute("stroke-dasharray", "8 4");
+  ghostEl.setAttribute("rx", "4");
+  ghostEl.setAttribute("visibility", "hidden");
+  svg.appendChild(ghostEl);
+
   let activePtId: number | null = null;
   let points: Pt[] = [];
   let cancelled = false;
@@ -740,6 +749,7 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     if (x < 0 || y < 0 || x > rect.width || y > rect.height) cancelled = true;
     points.push({ x, y });
     setPath(pathEl, points, false);
+    updateGhostBox(ghostEl, world, points, cancelled);
   });
 
   content.addEventListener("pointerup", (e: PointerEvent) => {
@@ -747,6 +757,8 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     activePtId = null;
     const rect = content.getBoundingClientRect();
     points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+
+    ghostEl.setAttribute("visibility", "hidden");
 
     if (!cancelled && isClosedLasso(points)) {
       const encircled = findEncircledBoxes(world, points);
@@ -774,6 +786,7 @@ function makeLassoGesture(content: HTMLElement, world: Box): void {
     activePtId = null;
     points = [];
     setPath(pathEl, points, false);
+    ghostEl.setAttribute("visibility", "hidden");
   });
 }
 
@@ -819,4 +832,41 @@ function pointInPolygon(x: number, y: number, polygon: Pt[]): boolean {
     }
   }
   return inside;
+}
+
+function computePreviewRect(world: Box, points: Pt[]): { x: number; y: number; w: number; h: number } {
+  const encircled = findEncircledBoxes(world, points);
+  const PADDING = 20;
+  if (encircled.length > 0) {
+    const minX = Math.min(...encircled.map(b => b.x));
+    const minY = Math.min(...encircled.map(b => b.y));
+    const maxX = Math.max(...encircled.map(b => b.x + (b.display === "window" ? b.w : 120)));
+    const maxY = Math.max(...encircled.map(b => b.y + (b.display === "window" ? b.h : 44)));
+    return {
+      x: minX - PADDING,
+      y: minY - PADDING - WINDOW_BAR_H,
+      w: Math.max(180, maxX - minX + 2 * PADDING),
+      h: Math.max(130, WINDOW_BAR_H + maxY - minY + 2 * PADDING),
+    };
+  }
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const w = 180;
+  const h = WINDOW_BAR_H + 130;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
+}
+
+function updateGhostBox(ghostEl: SVGRectElement, world: Box, points: Pt[], cancelled: boolean): void {
+  if (!cancelled && isClosedLasso(points)) {
+    const r = computePreviewRect(world, points);
+    ghostEl.setAttribute("x", String(r.x));
+    ghostEl.setAttribute("y", String(r.y));
+    ghostEl.setAttribute("width", String(r.w));
+    ghostEl.setAttribute("height", String(r.h));
+    ghostEl.setAttribute("visibility", "visible");
+  } else {
+    ghostEl.setAttribute("visibility", "hidden");
+  }
 }
