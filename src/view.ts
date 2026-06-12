@@ -298,6 +298,15 @@ function buildIcon(box: Box): HTMLElement {
   };
   el.appendChild(expandBtn);
 
+  el.dataset.boxId = box.id;
+  el.addEventListener("pointerdown", (e: PointerEvent) => {
+    if (selectedBoxId !== box.id) {
+      selectedBoxId = box.id;
+      updateSelection();
+    }
+    e.stopPropagation();
+  });
+
   makeDraggable(el, box);
   return el;
 }
