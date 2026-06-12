@@ -73,6 +73,41 @@ function updateSelection(): void {
   updateHelpBar();
 }
 
+// Boxes in this set are showing raw source even when a render mode is active.
+const rawViewBoxIds = new Set<string>();
+
+const KNOWN_RENDER_MODES = new Set(["svg"]);
+
+function getBoxRenderMode(box: Box): string {
+  const renderChild = box.children.find(c => c.label.trim().toLowerCase() === "render");
+  if (!renderChild) return "text";
+  const mode = renderChild.text.trim().toLowerCase();
+  return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
+}
+
+function buildSvgLayer(box: Box): HTMLElement {
+  const layer = document.createElement("div");
+  layer.className = "box-svg-layer";
+  layer.innerHTML = box.text;
+  return layer;
+}
+
+function buildRenderToggleBtn(box: Box): HTMLButtonElement | null {
+  const mode = getBoxRenderMode(box);
+  if (mode === "text") return null;
+  const isRaw = rawViewBoxIds.has(box.id);
+  const btn = document.createElement("button");
+  btn.title = isRaw ? `render as ${mode}` : "show raw source";
+  btn.textContent = isRaw ? mode : "raw";
+  if (!isRaw) btn.classList.add("box-btn-rendering");
+  btn.onclick = () => {
+    if (rawViewBoxIds.has(box.id)) rawViewBoxIds.delete(box.id);
+    else rawViewBoxIds.add(box.id);
+    render();
+  };
+  return btn;
+}
+
 export function mount(app: HTMLElement): void {
   appEl = app;
 
@@ -183,6 +218,9 @@ function buildWorld(box: Box): HTMLElement {
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
 
+  const renderToggle = buildRenderToggleBtn(box);
+  if (renderToggle) bar.appendChild(renderToggle);
+
   el.appendChild(bar);
 
   const content = document.createElement("div");
@@ -196,14 +234,21 @@ function buildWorld(box: Box): HTMLElement {
     }
   });
 
-  for (const child of box.children) {
-    content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+  const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
+  if (!isRenderedWorld) {
+    for (const child of box.children) {
+      content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+    }
   }
   makeLassoGesture(content, box);
   if (box.text) {
-    const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
-    tl.dataset.worldTextLayer = "1";
-    content.insertBefore(tl, content.firstChild);
+    if (isRenderedWorld) {
+      content.insertBefore(buildSvgLayer(box), content.firstChild);
+    } else {
+      const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
+      tl.dataset.worldTextLayer = "1";
+      content.insertBefore(tl, content.firstChild);
+    }
   }
   el.appendChild(content);
 
@@ -490,6 +535,9 @@ function buildWindow(box: Box): HTMLElement {
   if (box.text) textBtn.classList.add("box-btn-has-text");
   bar.appendChild(textBtn);
 
+  const renderToggleW = buildRenderToggleBtn(box);
+  if (renderToggleW) bar.appendChild(renderToggleW);
+
   const collapseBtn = document.createElement("button");
   collapseBtn.title = "collapse into parent";
   collapseBtn.textContent = "⤵";
@@ -521,14 +569,16 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
   const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
+  const isRenderedWindow = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
 
-  // Child boxes always use absolute positioning — unchanged from text-free behavior.
-  // The text layer (when present) is inserted first so it paints behind the boxes.
-  for (const child of box.children) {
-    body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+  if (!isRenderedWindow) {
+    for (const child of box.children) {
+      body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+    }
   }
   if (box.text) {
-    body.insertBefore(buildTextLayer(box), body.firstChild);
+    const layer = isRenderedWindow ? buildSvgLayer(box) : buildTextLayer(box);
+    body.insertBefore(layer, body.firstChild);
   }
 
   textBtn.onclick = () => {
