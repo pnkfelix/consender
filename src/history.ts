@@ -1,7 +1,7 @@
 import {
   createRoot,
   freshId,
-  getBoxName,
+  getBoxTitle,
   getNextId,
   setNextId,
 } from "./model.js";
@@ -59,7 +59,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
   acc[box.id] = {
     id: box.id,
     display: box.display,
-    children: box.children.map(({ name, box: c }) => ({ id: c.id, name })),
+    children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
     parentId: box.parent ? box.parent.id : null,
     x: box.x,
     y: box.y,
@@ -85,13 +85,16 @@ function deserializeChildren(
 ): NamedChild[] {
   const raw = s as any;
   if (raw.childIds) {
-    // old format: names were on the child boxes themselves
+    // very old format: titles were on the child boxes themselves
     return (raw.childIds as string[]).map((cid: string) => ({
-      name: (allBoxes[cid] as any)?.label ?? "box",
+      title: (allBoxes[cid] as any)?.label ?? "",
       box: live[cid],
     }));
   }
-  return s.children.map(c => ({ name: c.name, box: live[c.id] }));
+  return s.children.map(c => {
+    const rc = c as any;
+    return { title: rc.title ?? rc.name ?? "", box: live[c.id] };
+  });
 }
 
 export function deserializeOpSubtree(subtree: OpSubtree): Box {
@@ -128,7 +131,7 @@ function collectPersistedSubtree(
   acc[box.id] = {
     id: box.id,
     display: box.display,
-    children: box.children.map(({ name, box: c }) => ({ id: c.id, name })),
+    children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
     parentId: box.parent ? box.parent.id : null,
     x: box.x,
     y: box.y,
@@ -155,17 +158,17 @@ function migrateStackEntries(raw: any[]): StackEntry[] {
   return raw.map(e => {
     const entry: StackEntry = 'op' in e ? e as StackEntry : { op: e as Op };
     const op = entry.op as any;
-    if ((op.kind === "AddBox" || op.kind === "RemoveBox") && op.name === undefined) {
-      op.name = "box";
+    if (op.kind === "AddBox" || op.kind === "RemoveBox") {
+      if (op.title === undefined) op.title = op.name ?? "";
     }
-    if ((op.kind === "WrapInParent" || op.kind === "UnwrapFromParent") && op.childName === undefined) {
-      op.childName = "box";
+    if (op.kind === "WrapInParent" || op.kind === "UnwrapFromParent") {
+      if (op.childTitle === undefined) op.childTitle = op.childName ?? "";
     }
-    if ((op.kind === "GroupBoxes" || op.kind === "UngroupBoxes") && op.groupName === undefined) {
-      op.groupName = "group";
+    if (op.kind === "GroupBoxes" || op.kind === "UngroupBoxes") {
+      if (op.groupTitle === undefined) op.groupTitle = op.groupName ?? "group";
     }
-    if ((op.kind === "CollapseBox" || op.kind === "UncollapseBox") && op.boxName === undefined) {
-      op.boxName = "box";
+    if (op.kind === "CollapseBox" || op.kind === "UncollapseBox") {
+      if (op.boxTitle === undefined) op.boxTitle = op.boxName ?? "";
     }
     return entry;
   });
@@ -211,13 +214,13 @@ export function invertOp(op: Op): Op {
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
     case "AddBox":
-      return { kind: "RemoveBox", parentId: op.parentId, index: op.index, name: op.name, subtree: op.subtree };
+      return { kind: "RemoveBox", parentId: op.parentId, index: op.index, title: op.title, subtree: op.subtree };
     case "RemoveBox":
-      return { kind: "AddBox", parentId: op.parentId, index: op.index, name: op.name, subtree: op.subtree };
+      return { kind: "AddBox", parentId: op.parentId, index: op.index, title: op.title, subtree: op.subtree };
     case "WrapInParent":
-      return { kind: "UnwrapFromParent", wrapperId: op.wrapperId, childId: op.childId, childName: op.childName, prevX: op.prevX, prevY: op.prevY };
+      return { kind: "UnwrapFromParent", wrapperId: op.wrapperId, childId: op.childId, childTitle: op.childTitle, prevX: op.prevX, prevY: op.prevY };
     case "UnwrapFromParent":
-      return { kind: "WrapInParent", wrapperId: op.wrapperId, childId: op.childId, childName: op.childName, prevX: op.prevX, prevY: op.prevY };
+      return { kind: "WrapInParent", wrapperId: op.wrapperId, childId: op.childId, childTitle: op.childTitle, prevX: op.prevX, prevY: op.prevY };
     case "GroupBoxes":
       return { ...op, kind: "UngroupBoxes" };
     case "UngroupBoxes":
@@ -249,7 +252,7 @@ export function applyOp(
       const box = findBox(root, op.id);
       if (box?.parent) {
         const nc = box.parent.children.find(c => c.box === box);
-        if (nc) nc.name = op.label;
+        if (nc) nc.title = op.label;
       }
       return { root, worldId };
     }
@@ -268,7 +271,7 @@ export function applyOp(
       if (!parent) return { root, worldId };
       const newBox = deserializeOpSubtree(op.subtree);
       newBox.parent = parent;
-      parent.children.splice(op.index, 0, { name: op.name, box: newBox });
+      parent.children.splice(op.index, 0, { title: op.title, box: newBox });
       return { root, worldId };
     }
     case "RemoveBox": {
@@ -290,7 +293,7 @@ export function applyOp(
       const wrapper: Box = {
         id: op.wrapperId,
         display: "window" as DisplayMode,
-        children: [{ name: op.childName, box: child }],
+        children: [{ title: op.childTitle, box: child }],
         parent: null,
         x: 0,
         y: 0,
@@ -348,14 +351,14 @@ export function applyOp(
         child.x = newPos.x;
         child.y = newPos.y;
         child.parent = group;
-        group.children.push({ name: nc.name, box: child });
+        group.children.push({ title: nc.title, box: child });
       }
       if (op.groupText !== undefined) {
         world.text = op.worldNewText ?? world.text;
         group.text = op.groupText;
       }
       world.children = world.children.filter(c => !op.childIds.includes(c.box.id));
-      world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, { name: op.groupName, box: group });
+      world.children.splice(Math.min(op.groupInsertIndex, world.children.length), 0, { title: op.groupTitle, box: group });
       return { root, worldId };
     }
     case "UngroupBoxes": {
@@ -379,7 +382,7 @@ export function applyOp(
         child.x = r.prevPos.x;
         child.y = r.prevPos.y;
         child.parent = world;
-        world.children.splice(r.index, 0, { name: nc.name, box: child });
+        world.children.splice(r.index, 0, { title: nc.title, box: child });
       }
       if (op.worldPrevText !== undefined) {
         world.text = op.worldPrevText;
@@ -401,7 +404,7 @@ export function applyOp(
         child.x = newPos.x;
         child.y = newPos.y;
         child.parent = parent;
-        parent.children.splice(op.boxIndex + i, 0, { name: nc.name, box: child });
+        parent.children.splice(op.boxIndex + i, 0, { title: nc.title, box: child });
       }
       parent.text = op.parentNewText;
       let newWorldId = worldId;
@@ -435,9 +438,9 @@ export function applyOp(
         child.x = prevPos.x;
         child.y = prevPos.y;
         child.parent = box;
-        box.children.push({ name: nc.name, box: child });
+        box.children.push({ title: nc.title, box: child });
       }
-      parent.children.splice(op.boxIndex, 0, { name: op.boxName, box });
+      parent.children.splice(op.boxIndex, 0, { title: op.boxTitle, box });
       parent.text = op.parentPrevText;
       return { root, worldId };
     }
@@ -604,7 +607,7 @@ export function mkRenameBox(
   box: Box,
   newLabel: string
 ): Op {
-  return { kind: "RenameBox", id: box.id, label: newLabel, prevLabel: getBoxName(box) };
+  return { kind: "RenameBox", id: box.id, label: newLabel, prevLabel: getBoxTitle(box) };
 }
 
 export function mkSetDisplay(
@@ -694,7 +697,7 @@ export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
     kind: "AddBox",
     parentId: parent.id,
     index: parent.children.length,
-    name: "box",
+    title: "",
     subtree,
   };
 }
@@ -706,7 +709,7 @@ export function mkRemoveBox(box: Box): Op {
     kind: "RemoveBox",
     parentId: box.parent.id,
     index,
-    name: getBoxName(box),
+    title: getBoxTitle(box),
     subtree: serializeOpSubtree(box),
   };
 }
@@ -730,7 +733,7 @@ export function mkCollapseBox(box: Box): Op {
     boxId: box.id,
     parentId: parent.id,
     boxIndex,
-    boxName: getBoxName(box),
+    boxTitle: getBoxTitle(box),
     subtree: serializeOpSubtree(box),
     childIds,
     prevPositions,
@@ -746,7 +749,7 @@ export function mkWrapInParent(box: Box): Op {
     kind: "WrapInParent",
     wrapperId,
     childId: box.id,
-    childName: getBoxName(box),
+    childTitle: getBoxTitle(box),
     prevX: box.x,
     prevY: box.y,
   };
@@ -795,7 +798,7 @@ export function mkGroupBoxes(world: Box, toGroup: Box[], groupText = "", worldNe
     kind: "GroupBoxes",
     worldId: world.id,
     groupId,
-    groupName: "group",
+    groupTitle: "group",
     childIds,
     childIndices,
     prevPositions,

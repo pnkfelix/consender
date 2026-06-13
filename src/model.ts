@@ -3,7 +3,7 @@ export type DisplayMode = "icon" | "window";
 export interface PositionRecord { id: string; x: number; y: number }
 
 export interface NamedChild {
-  name: string;
+  title: string;
   box: Box;
 }
 
@@ -13,26 +13,26 @@ export type Op =
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
   | { kind: "SetBoxText";       id: string; text: string; prevText: string }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
-  | { kind: "AddBox";           parentId: string; index: number; name: string; subtree: OpSubtree }
-  | { kind: "RemoveBox";        parentId: string; index: number; name: string; subtree: OpSubtree }
-  | { kind: "WrapInParent";     wrapperId: string; childId: string; childName: string; prevX: number; prevY: number }
-  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; childName: string; prevX: number; prevY: number }
+  | { kind: "AddBox";           parentId: string; index: number; title: string; subtree: OpSubtree }
+  | { kind: "RemoveBox";        parentId: string; index: number; title: string; subtree: OpSubtree }
+  | { kind: "WrapInParent";     wrapperId: string; childId: string; childTitle: string; prevX: number; prevY: number }
+  | { kind: "UnwrapFromParent"; wrapperId: string; childId: string; childTitle: string; prevX: number; prevY: number }
   | { kind: "GroupBoxes";
-      worldId: string; groupId: string; groupName: string;
+      worldId: string; groupId: string; groupTitle: string;
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
       groupInsertIndex: number;
       worldPrevText?: string; worldNewText?: string; groupText?: string }
   | { kind: "UngroupBoxes";
-      worldId: string; groupId: string; groupName: string;
+      worldId: string; groupId: string; groupTitle: string;
       childIds: string[]; childIndices: number[];
       prevPositions: PositionRecord[]; newPositions: PositionRecord[];
       groupX: number; groupY: number; groupW: number; groupH: number;
       groupInsertIndex: number;
       worldPrevText?: string; worldNewText?: string; groupText?: string }
   | { kind: "CollapseBox";
-      boxId: string; parentId: string; boxIndex: number; boxName: string;
+      boxId: string; parentId: string; boxIndex: number; boxTitle: string;
       subtree: OpSubtree;
       childIds: string[];
       prevPositions: PositionRecord[];
@@ -40,7 +40,7 @@ export type Op =
       parentPrevText: string;
       parentNewText: string; }
   | { kind: "UncollapseBox";
-      boxId: string; parentId: string; boxIndex: number; boxName: string;
+      boxId: string; parentId: string; boxIndex: number; boxTitle: string;
       subtree: OpSubtree;
       childIds: string[];
       prevPositions: PositionRecord[];
@@ -56,7 +56,7 @@ export interface OpSubtree {
 export interface SerializedBox {
   id: string;
   display: DisplayMode;
-  children: Array<{ id: string; name: string }>;
+  children: Array<{ id: string; title: string }>;
   parentId: string | null;
   x: number;
   y: number;
@@ -98,10 +98,10 @@ export function setNextId(n: number): void {
   nextId = n;
 }
 
-export function getBoxName(box: Box): string {
+export function getBoxTitle(box: Box): string {
   if (!box.parent) return "world";
   const nc = box.parent.children.find(c => c.box === box);
-  return nc?.name ?? "";
+  return nc?.title ?? "";
 }
 
 export function createBox(parent: Box | null): Box {
@@ -124,9 +124,9 @@ export function createRoot(): Box {
   return createBox(null);
 }
 
-export function wrapInParent(box: Box, childName: string): Box {
+export function wrapInParent(box: Box, childTitle: string): Box {
   const parent = createBox(null);
-  parent.children = [{ name: childName, box }];
+  parent.children = [{ title: childTitle, box }];
   box.parent = parent;
   box.display = "window";
   box.x = 40;
@@ -134,9 +134,9 @@ export function wrapInParent(box: Box, childName: string): Box {
   return parent;
 }
 
-export function addChild(parent: Box, name: string): Box {
+export function addChild(parent: Box, title: string): Box {
   const child = createBox(parent);
-  parent.children.push({ name, box: child });
+  parent.children.push({ title, box: child });
   return child;
 }
 

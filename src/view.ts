@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import type { Box } from "./model.js";
-import { getBoxName } from "./model.js";
+import { getBoxTitle } from "./model.js";
 import {
   canUndo,
   findBox,
@@ -49,7 +49,7 @@ const helpMap: Record<string, string> = {
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
   while (cur !== null) {
-    const cfg = cur.children.find(c => c.name === "toolbarPolicy");
+    const cfg = cur.children.find(c => c.title === "toolbarPolicy");
     if (cfg) {
       const t = cfg.box.text.trim().toLowerCase();
       if (t === "focus") return "focus";
@@ -63,7 +63,7 @@ function resolveToolbarPolicy(box: Box): ToolbarPolicy {
 function updateHelpBar(): void {
   const selectedBox = selectedBoxId ? findBox(root, selectedBoxId) : null;
   const world = findBox(root, worldId);
-  const name = selectedBox != null ? getBoxName(selectedBox) : world != null ? getBoxName(world) : "";
+  const name = selectedBox != null ? getBoxTitle(selectedBox) : world != null ? getBoxTitle(world) : "";
   const text = helpMap[name];
   helpEl.textContent = text ?? "";
   helpEl.style.display = text != null ? "block" : "none";
@@ -82,7 +82,7 @@ const rawViewBoxIds = new Set<string>();
 const KNOWN_RENDER_MODES = new Set(["svg", "markdown"]);
 
 function getBoxRenderMode(box: Box): string {
-  const renderChild = box.children.find(c => c.name.trim().toLowerCase() === "render");
+  const renderChild = box.children.find(c => c.title.trim().toLowerCase() === "render");
   if (!renderChild) return "text";
   const mode = renderChild.box.text.trim().toLowerCase();
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
@@ -324,7 +324,7 @@ function buildCrumb(box: Box): HTMLElement {
       el.appendChild(sep);
     }
     const span = document.createElement("span");
-    span.textContent = getBoxName(ancestor);
+    span.textContent = getBoxTitle(ancestor);
     if (i < path.length - 1) {
       span.className = "crumb-link";
       span.onclick = () => {
@@ -357,7 +357,7 @@ function buildIcon(box: Box): HTMLElement {
 
   const label = document.createElement("span");
   label.className = "box-icon-label";
-  label.textContent = getBoxName(box);
+  label.textContent = getBoxTitle(box);
   el.appendChild(label);
 
   const value = iconValueWord(box);
@@ -439,13 +439,13 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
   if (!ctx) return layer;
   ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
 
-  const regions = box.children.map(({ name, box: c }) => ({
+  const regions = box.children.map(({ title, box: c }) => ({
     x: c.x,
     y: c.y,
     w: c.display === "window" ? c.w : (() => {
         const v = iconValueWord(c);
         const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-        return Math.max(80, ctx.measureText(name).width + extra + 68);
+        return Math.max(80, ctx.measureText(title).width + extra + 68);
       })(),
     h: c.display === "window" ? c.h : 44,
   }));
@@ -511,16 +511,16 @@ function buildWindow(box: Box): HTMLElement {
 
   const label = document.createElement("span");
   label.className = "box-label";
-  label.textContent = getBoxName(box);
+  label.textContent = getBoxTitle(box);
   bar.appendChild(label);
 
   const renameBtn = document.createElement("button");
   renameBtn.title = "rename";
   renameBtn.textContent = "✎";
   renameBtn.onclick = () => {
-    const name = window.prompt("Name:", getBoxName(box));
-    if (name !== null && name.trim()) {
-      const result = recordOn(root, worldId, mkRenameBox(box, name.trim()));
+    const newTitle = window.prompt("Title:", getBoxTitle(box));
+    if (newTitle !== null) {
+      const result = recordOn(root, worldId, mkRenameBox(box, newTitle.trim()));
       root = result.root;
       worldId = result.worldId;
       render();
