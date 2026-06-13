@@ -159,12 +159,31 @@ export function mount(app: HTMLElement): void {
   });
 }
 
+// Bar right padding (matches .box-titlebar padding: 0 10px).
+const BAR_PAD_RIGHT = 10;
+
+function repositionRibbons(): void {
+  document.querySelectorAll<HTMLElement>(".box-window-bar").forEach(bar => {
+    const label = bar.querySelector<HTMLElement>(":scope > .box-label");
+    const ribbon = bar.querySelector<HTMLElement>(":scope > .box-ribbon");
+    if (!label || !ribbon) return;
+    const barW = bar.offsetWidth;
+    const titleRight = label.offsetLeft + label.offsetWidth;
+    const ribbonW = ribbon.offsetWidth;
+    // Right-align when there's room; otherwise trail the title; pin at bar right edge
+    // when the title itself overflows the bar.
+    const left = Math.min(Math.max(barW - BAR_PAD_RIGHT - ribbonW, titleRight), barW);
+    ribbon.style.left = `${left}px`;
+  });
+}
+
 function render(): void {
   const world = findBox(root, worldId);
   if (!world) return;
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
   updateHelpBar();
+  requestAnimationFrame(repositionRibbons);
 }
 
 function buildWorld(box: Box): HTMLElement {
@@ -514,6 +533,9 @@ function buildWindow(box: Box): HTMLElement {
   label.textContent = getBoxTitle(box);
   bar.appendChild(label);
 
+  const ribbon = document.createElement("div");
+  ribbon.className = "box-ribbon";
+
   const renameBtn = document.createElement("button");
   renameBtn.title = "rename";
   renameBtn.textContent = "✎";
@@ -526,7 +548,7 @@ function buildWindow(box: Box): HTMLElement {
       render();
     }
   };
-  bar.appendChild(renameBtn);
+  ribbon.appendChild(renameBtn);
 
   const iconBtn = document.createElement("button");
   iconBtn.title = "minimize";
@@ -537,7 +559,7 @@ function buildWindow(box: Box): HTMLElement {
     worldId = result.worldId;
     render();
   };
-  bar.appendChild(iconBtn);
+  ribbon.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
   fullBtn.title = "zoom in";
@@ -547,7 +569,7 @@ function buildWindow(box: Box): HTMLElement {
     persist(root, worldId);
     render();
   };
-  bar.appendChild(fullBtn);
+  ribbon.appendChild(fullBtn);
 
   const isRawModeW = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
 
@@ -562,7 +584,7 @@ function buildWindow(box: Box): HTMLElement {
       worldId = result.worldId;
       render();
     };
-    bar.appendChild(undoBtn);
+    ribbon.appendChild(undoBtn);
 
     const redoBtn = document.createElement("button");
     redoBtn.title = "redo";
@@ -574,17 +596,17 @@ function buildWindow(box: Box): HTMLElement {
       worldId = result.worldId;
       render();
     };
-    bar.appendChild(redoBtn);
+    ribbon.appendChild(redoBtn);
   }
 
   const textBtn = document.createElement("button");
   textBtn.title = "edit text";
   textBtn.textContent = "T";
   if (box.text) textBtn.classList.add("box-btn-has-text");
-  bar.appendChild(textBtn);
+  ribbon.appendChild(textBtn);
 
   const renderToggleW = buildRenderToggleBtn(box);
-  if (renderToggleW) bar.appendChild(renderToggleW);
+  if (renderToggleW) ribbon.appendChild(renderToggleW);
 
   if (isRawModeW) {
     const collapseBtn = document.createElement("button");
@@ -598,7 +620,7 @@ function buildWindow(box: Box): HTMLElement {
       worldId = result.worldId;
       render();
     };
-    bar.appendChild(collapseBtn);
+    ribbon.appendChild(collapseBtn);
   }
 
   const delBtn = document.createElement("button");
@@ -612,8 +634,9 @@ function buildWindow(box: Box): HTMLElement {
     worldId = result.worldId;
     render();
   };
-  bar.appendChild(delBtn);
+  ribbon.appendChild(delBtn);
 
+  bar.appendChild(ribbon);
   el.appendChild(bar);
 
   const body = document.createElement("div");
@@ -748,6 +771,7 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
       box.h = Math.max(80, startH + (ev.clientY - startY));
       el.style.width = `${box.w}px`;
       el.style.height = `${box.h}px`;
+      repositionRibbons();
     };
 
     const onUp = (ev: PointerEvent): void => {
