@@ -343,14 +343,9 @@ html, body, #app {
   color: #8cc8f0 !important;
 }
 
-/* ---- selection and focus highlights ---- */
+/* ---- selection highlight ---- */
 .box-selected {
   outline: 2px solid #4a90d9;
-  outline-offset: 1px;
-}
-
-.box-focused {
-  outline: 2px solid #c8a000;
   outline-offset: 1px;
 }
 
