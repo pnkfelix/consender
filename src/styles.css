@@ -99,8 +99,8 @@ html, body, #app {
 
 .box-window-bar button:hover { background: #fff; }
 
-/* Focus policy: hide buttons unless the box is selected */
-.box-window[data-toolbar-policy="focus"]:not(.box-selected) > .box-window-bar button {
+/* Focus policy: hide buttons unless the box has UI focus */
+.box-window[data-toolbar-policy="focus"]:not(.box-focused) > .box-window-bar button {
   display: none;
 }
 
@@ -343,9 +343,14 @@ html, body, #app {
   color: #8cc8f0 !important;
 }
 
-/* ---- selection highlight ---- */
+/* ---- selection and focus highlights ---- */
 .box-selected {
   outline: 2px solid #4a90d9;
+  outline-offset: 1px;
+}
+
+.box-focused {
+  outline: 2px solid #888;
   outline-offset: 1px;
 }
 

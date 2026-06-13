@@ -30,6 +30,7 @@ let worldId!: string;
 const selectedBoxIds = new Set<string>();
 type Mode = "select" | "act";
 let mode: Mode = "select";
+let focusedBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
 // Map box labels to context-sensitive help text shown in the help bar.
@@ -78,6 +79,12 @@ function updateSelection(): void {
     el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
   updateHelpBar();
+}
+
+function updateFocusHighlight(): void {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
+    el.classList.toggle("box-focused", el.dataset.boxId === focusedBoxId);
+  });
 }
 
 function buildModeSwitcher(): HTMLElement {
@@ -270,10 +277,8 @@ function buildWorld(box: Box): HTMLElement {
   content.style.touchAction = "none";
 
   content.addEventListener("pointerdown", () => {
-    if (mode === "select" && selectedBoxIds.size > 0) {
-      selectedBoxIds.clear();
-      updateSelection();
-    }
+    if (focusedBoxId !== null) { focusedBoxId = null; updateFocusHighlight(); }
+    if (mode === "select" && selectedBoxIds.size > 0) { selectedBoxIds.clear(); updateSelection(); }
   });
 
   const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
@@ -410,9 +415,11 @@ function buildIcon(box: Box): HTMLElement {
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
-  if (focusBoxId === box.id) el.classList.add("box-focused");
+  if (focusedBoxId === box.id) el.classList.add("box-focused");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (mode === "select") {
+    if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
+    const onButton = !!(e.target as HTMLElement).closest("button");
+    if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
       updateSelection();
@@ -521,13 +528,16 @@ function buildWindow(box: Box): HTMLElement {
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
+  if (focusedBoxId === box.id) el.classList.add("box-focused");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
 
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (mode === "select") {
+    if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
+    const onButton = !!(e.target as HTMLElement).closest("button");
+    if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
       updateSelection();
@@ -546,7 +556,7 @@ function buildWindow(box: Box): HTMLElement {
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
 
-  if (mode === "act" && box.text.trim().length > 0) {
+  if (box.text.trim().length > 0) {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
