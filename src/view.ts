@@ -586,18 +586,20 @@ function buildWindow(box: Box): HTMLElement {
   const renderToggleW = buildRenderToggleBtn(box);
   if (renderToggleW) bar.appendChild(renderToggleW);
 
-  const collapseBtn = document.createElement("button");
-  collapseBtn.title = "collapse into parent";
-  collapseBtn.textContent = "⤵";
-  collapseBtn.onclick = () => {
-    if (!box.parent) return;
-    const op = mkCollapseBox(box);
-    const result = recordOn(root, worldId, op);
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  bar.appendChild(collapseBtn);
+  if (isRawModeW) {
+    const collapseBtn = document.createElement("button");
+    collapseBtn.title = "collapse into parent";
+    collapseBtn.textContent = "⤵";
+    collapseBtn.onclick = () => {
+      if (!box.parent) return;
+      const op = mkCollapseBox(box);
+      const result = recordOn(root, worldId, op);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(collapseBtn);
+  }
 
   const delBtn = document.createElement("button");
   delBtn.title = "delete";
