@@ -27,6 +27,9 @@ let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
 let selectedBoxId: string | null = null;
+type Mode = "select" | "act";
+let mode: Mode = "select";
+let focusBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
 // Map box labels to context-sensitive help text shown in the help bar.
@@ -74,6 +77,31 @@ function updateSelection(): void {
     el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
   });
   updateHelpBar();
+}
+
+function updateFocusHighlight(): void {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
+    el.classList.toggle("box-focused", el.dataset.boxId === focusBoxId);
+  });
+}
+
+function buildModeSwitcher(): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "mode-switcher";
+  for (const m of ["select", "act"] as Mode[]) {
+    const btn = document.createElement("button");
+    btn.textContent = m;
+    if (mode === m) btn.classList.add("mode-btn-active");
+    btn.onclick = () => {
+      if (mode === m) return;
+      mode = m;
+      if (mode === "select") focusBoxId = null;
+      else selectedBoxId = null;
+      render();
+    };
+    el.appendChild(btn);
+  }
+  return el;
 }
 
 // Boxes in this set are showing raw source even when a render mode is active.
@@ -240,6 +268,8 @@ function buildWorld(box: Box): HTMLElement {
   const renderToggle = buildRenderToggleBtn(box);
   if (renderToggle) bar.appendChild(renderToggle);
 
+  bar.appendChild(buildModeSwitcher());
+
   el.appendChild(bar);
 
   const content = document.createElement("div");
@@ -247,9 +277,10 @@ function buildWorld(box: Box): HTMLElement {
   content.style.touchAction = "none";
 
   content.addEventListener("pointerdown", () => {
-    if (selectedBoxId !== null) {
-      selectedBoxId = null;
-      updateSelection();
+    if (mode === "act") {
+      if (focusBoxId !== null) { focusBoxId = null; updateFocusHighlight(); }
+    } else {
+      if (selectedBoxId !== null) { selectedBoxId = null; updateSelection(); }
     }
   });
 
@@ -387,11 +418,12 @@ function buildIcon(box: Box): HTMLElement {
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxId === box.id) el.classList.add("box-selected");
-
+  if (focusBoxId === box.id) el.classList.add("box-focused");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (selectedBoxId !== box.id) {
-      selectedBoxId = box.id;
-      updateSelection();
+    if (mode === "act") {
+      if (focusBoxId !== box.id) { focusBoxId = box.id; updateFocusHighlight(); }
+    } else {
+      if (selectedBoxId !== box.id) { selectedBoxId = box.id; updateSelection(); }
     }
     e.stopPropagation();
   });
@@ -497,15 +529,17 @@ function buildWindow(box: Box): HTMLElement {
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxId === box.id) el.classList.add("box-selected");
+  if (focusBoxId === box.id) el.classList.add("box-focused");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
 
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (selectedBoxId !== box.id) {
-      selectedBoxId = box.id;
-      updateSelection();
+    if (mode === "act") {
+      if (focusBoxId !== box.id) { focusBoxId = box.id; updateFocusHighlight(); }
+    } else {
+      if (selectedBoxId !== box.id) { selectedBoxId = box.id; updateSelection(); }
     }
     e.stopPropagation();
   });

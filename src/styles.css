@@ -342,3 +342,44 @@ html, body, #app {
   background: #1a3d5c !important;
   color: #8cc8f0 !important;
 }
+
+/* ---- selection and focus highlights ---- */
+.box-selected {
+  outline: 2px solid #4a90d9;
+  outline-offset: 1px;
+}
+
+.box-focused {
+  outline: 2px solid #c8a000;
+  outline-offset: 1px;
+}
+
+/* ---- mode switcher ---- */
+.mode-switcher {
+  display: flex;
+  gap: 0;
+  background: #111;
+  border-radius: 4px;
+  padding: 3px;
+  margin-left: 8px;
+}
+
+.mode-switcher button {
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+
+.mode-switcher button:hover { background: #2a2a2a; color: #ccc; }
+
+.mode-switcher .mode-btn-active {
+  background: var(--bar-ink);
+  color: var(--bar-bg);
+}
