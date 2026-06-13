@@ -114,6 +114,7 @@ html, body, #app {
 
 .box-ribbon {
   flex-shrink: 0;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
