@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { runScript } from "./script.js";
 import type { Box } from "./model.js";
 import { getBoxTitle } from "./model.js";
 import {
@@ -544,6 +545,19 @@ function buildWindow(box: Box): HTMLElement {
 
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
+
+  if (mode === "act" && box.text.trim().length > 0) {
+    const runBtn = document.createElement("button");
+    runBtn.title = "run script";
+    runBtn.textContent = "▶";
+    runBtn.onclick = () => {
+      const result = runScript(box.text, root, worldId, selectedBoxIds);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    ribbon.appendChild(runBtn);
+  }
 
   const renameBtn = document.createElement("button");
   renameBtn.title = "rename";

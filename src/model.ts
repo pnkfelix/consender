@@ -46,7 +46,8 @@ export type Op =
       prevPositions: PositionRecord[];
       newPositions: PositionRecord[];
       parentPrevText: string;
-      parentNewText: string; };
+      parentNewText: string; }
+  | { kind: "BatchOp"; ops: Op[] };
 
 export interface OpSubtree {
   rootId: string;
