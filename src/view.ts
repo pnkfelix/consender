@@ -159,31 +159,12 @@ export function mount(app: HTMLElement): void {
   });
 }
 
-// Bar right padding (matches .box-titlebar padding: 0 10px).
-const BAR_PAD_RIGHT = 10;
-
-function repositionRibbons(): void {
-  document.querySelectorAll<HTMLElement>(".box-window-bar").forEach(bar => {
-    const label = bar.querySelector<HTMLElement>(":scope > .box-label");
-    const ribbon = bar.querySelector<HTMLElement>(":scope > .box-ribbon");
-    if (!label || !ribbon) return;
-    const barW = bar.offsetWidth;
-    const titleRight = label.offsetLeft + label.offsetWidth;
-    const ribbonW = ribbon.offsetWidth;
-    // Right-align when there's room; otherwise trail the title; pin at bar right edge
-    // when the title itself overflows the bar.
-    const left = Math.min(Math.max(barW - BAR_PAD_RIGHT - ribbonW, titleRight), barW);
-    ribbon.style.left = `${left}px`;
-  });
-}
-
 function render(): void {
   const world = findBox(root, worldId);
   if (!world) return;
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
   updateHelpBar();
-  requestAnimationFrame(repositionRibbons);
 }
 
 function buildWorld(box: Box): HTMLElement {
@@ -771,7 +752,6 @@ function makeResizable(handle: HTMLElement, box: Box, el: HTMLElement): void {
       box.h = Math.max(80, startH + (ev.clientY - startY));
       el.style.width = `${box.w}px`;
       el.style.height = `${box.h}px`;
-      repositionRibbons();
     };
 
     const onUp = (ev: PointerEvent): void => {

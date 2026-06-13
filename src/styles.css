@@ -87,8 +87,6 @@ html, body, #app {
   border-bottom: 1px solid var(--border);
   touch-action: none;
   min-height: 44px;
-  position: relative;
-  overflow: visible;
 }
 
 .box-window-bar:active { cursor: grabbing; }
@@ -107,17 +105,17 @@ html, body, #app {
 }
 
 .box-label {
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   outline: none;
-  min-width: 1ch;
   padding: 2px 4px;
   white-space: nowrap;
 }
 
 .box-ribbon {
-  position: absolute;
-  top: 0;
-  height: 100%;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
