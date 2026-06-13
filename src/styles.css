@@ -87,8 +87,6 @@ html, body, #app {
   border-bottom: 1px solid var(--border);
   touch-action: none;
   min-height: 44px;
-  position: relative;
-  overflow: visible;
 }
 
 .box-window-bar:active { cursor: grabbing; }
@@ -115,9 +113,8 @@ html, body, #app {
 }
 
 .box-ribbon {
-  position: absolute;
-  top: 0;
-  height: 100%;
+  flex-shrink: 0;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
