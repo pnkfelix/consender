@@ -26,10 +26,9 @@ type ToolbarPolicy = "always" | "focus";
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
-let selectedBoxId: string | null = null;
+const selectedBoxIds = new Set<string>();
 type Mode = "select" | "act";
 let mode: Mode = "select";
-let focusBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
 // Map box labels to context-sensitive help text shown in the help bar.
@@ -64,7 +63,8 @@ function resolveToolbarPolicy(box: Box): ToolbarPolicy {
 }
 
 function updateHelpBar(): void {
-  const selectedBox = selectedBoxId ? findBox(root, selectedBoxId) : null;
+  const lastId = [...selectedBoxIds].at(-1);
+  const selectedBox = lastId ? findBox(root, lastId) : null;
   const world = findBox(root, worldId);
   const name = selectedBox != null ? getBoxTitle(selectedBox) : world != null ? getBoxTitle(world) : "";
   const text = helpMap[name];
@@ -73,16 +73,10 @@ function updateHelpBar(): void {
 }
 
 function updateSelection(): void {
-  document.querySelectorAll<HTMLElement>(".box-window").forEach(el => {
-    el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
+    el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
   updateHelpBar();
-}
-
-function updateFocusHighlight(): void {
-  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
-    el.classList.toggle("box-focused", el.dataset.boxId === focusBoxId);
-  });
 }
 
 function buildModeSwitcher(): HTMLElement {
@@ -95,8 +89,6 @@ function buildModeSwitcher(): HTMLElement {
     btn.onclick = () => {
       if (mode === m) return;
       mode = m;
-      if (mode === "select") focusBoxId = null;
-      else selectedBoxId = null;
       render();
     };
     el.appendChild(btn);
@@ -296,10 +288,9 @@ function buildWorld(box: Box): HTMLElement {
   content.style.touchAction = "none";
 
   content.addEventListener("pointerdown", () => {
-    if (mode === "act") {
-      if (focusBoxId !== null) { focusBoxId = null; updateFocusHighlight(); }
-    } else {
-      if (selectedBoxId !== null) { selectedBoxId = null; updateSelection(); }
+    if (mode === "select" && selectedBoxIds.size > 0) {
+      selectedBoxIds.clear();
+      updateSelection();
     }
   });
 
@@ -434,12 +425,12 @@ function buildIcon(box: Box): HTMLElement {
   el.appendChild(expandBtn);
 
   el.dataset.boxId = box.id;
-  if (focusBoxId === box.id) el.classList.add("box-focused");
+  if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (mode === "act") {
-      if (focusBoxId !== box.id) { focusBoxId = box.id; updateFocusHighlight(); }
-    } else {
-      if (selectedBoxId !== box.id) { selectedBoxId = box.id; updateSelection(); }
+    if (mode === "select") {
+      if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
+      else selectedBoxIds.add(box.id);
+      updateSelection();
     }
     e.stopPropagation();
   });
@@ -544,18 +535,17 @@ function buildWindow(box: Box): HTMLElement {
   el.dataset.boxId = box.id;
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
-  if (selectedBoxId === box.id) el.classList.add("box-selected");
-  if (focusBoxId === box.id) el.classList.add("box-focused");
+  if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
   el.style.height = `${box.h}px`;
 
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (mode === "act") {
-      if (focusBoxId !== box.id) { focusBoxId = box.id; updateFocusHighlight(); }
-    } else {
-      if (selectedBoxId !== box.id) { selectedBoxId = box.id; updateSelection(); }
+    if (mode === "select") {
+      if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
+      else selectedBoxIds.add(box.id);
+      updateSelection();
     }
     e.stopPropagation();
   });
