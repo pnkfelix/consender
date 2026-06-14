@@ -229,6 +229,8 @@ export function invertOp(op: Op): Op {
       return { ...op, kind: "UncollapseBox" };
     case "UncollapseBox":
       return { ...op, kind: "CollapseBox" };
+    case "BatchOp":
+      return { kind: "BatchOp", ops: [...op.ops].reverse().map(invertOp) };
   }
 }
 
@@ -411,6 +413,13 @@ export function applyOp(
       if (worldId === op.boxId) newWorldId = op.parentId;
       return { root, worldId: newWorldId };
     }
+    case "BatchOp": {
+      let cur = { root, worldId };
+      for (const subOp of op.ops) {
+        cur = applyOp(cur.root, cur.worldId, subOp);
+      }
+      return cur;
+    }
     case "UncollapseBox": {
       const parent = findBox(root, op.parentId);
       if (!parent) return { root, worldId };
@@ -469,6 +478,8 @@ function stackBoxId(op: Op, root: Box): string | null {
     case "CollapseBox":
     case "UncollapseBox":
       return op.parentId;
+    case "BatchOp":
+      return null;
   }
 }
 
