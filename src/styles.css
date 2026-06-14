@@ -344,9 +344,15 @@ html, body, #app {
 }
 
 /* ---- selection and focus highlights ---- */
+@keyframes selected-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px #4a90d9; }
+  50%       { box-shadow: 0 0 0 6px rgba(74, 144, 217, 0.25); }
+}
+
 .box-selected {
   outline: 2px solid #4a90d9;
   outline-offset: 1px;
+  animation: selected-pulse 1.4s ease-in-out infinite;
 }
 
 .box-focused {
