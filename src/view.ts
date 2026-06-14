@@ -33,6 +33,47 @@ let mode: Mode = "select";
 let focusedBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
+// Ids of boxes that occlude a sibling, recomputed each render. Children are
+// already clipped to their parent, so the only thing behind a box that is not
+// its parent is an overlapping sibling painted underneath it. Such boxes cast a
+// drop shadow so "floating over a sibling" reads as distinct from "nested in a
+// parent"; a box sitting only over its parent stays flat.
+let occludingBoxIds = new Set<string>();
+
+// Approximate footprint of a box in its parent's coordinate space. Windows use
+// their stored geometry; icons use a nominal size since their real width depends
+// on label text (matching the icon-size approximations used elsewhere).
+const ICON_OCCLUSION_W = 120;
+const ICON_OCCLUSION_H = 44;
+
+function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
+  if (box.display === "window") return { x: box.x, y: box.y, w: box.w, h: box.h };
+  return { x: box.x, y: box.y, w: ICON_OCCLUSION_W, h: ICON_OCCLUSION_H };
+}
+
+function footprintsOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+// A box occludes a sibling when it overlaps another child painted behind it
+// (earlier in its parent's child order, since later children paint on top).
+function collectOccluders(box: Box, out: Set<string>): void {
+  const kids = box.children;
+  for (let i = 0; i < kids.length; i++) {
+    const fi = boxFootprint(kids[i].box);
+    for (let j = 0; j < i; j++) {
+      if (footprintsOverlap(fi, boxFootprint(kids[j].box))) {
+        out.add(kids[i].box.id);
+        break;
+      }
+    }
+  }
+  for (const { box: child } of kids) collectOccluders(child, out);
+}
+
 // Map box labels to context-sensitive help text shown in the help bar.
 const helpMap: Record<string, string> = {
   "toolbarPolicy": "Controls toolbar visibility for sibling boxes. " +
@@ -190,6 +231,8 @@ export function mount(app: HTMLElement): void {
 function render(): void {
   const world = findBox(root, worldId);
   if (!world) return;
+  occludingBoxIds = new Set();
+  collectOccluders(world, occludingBoxIds);
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
   updateHelpBar();
@@ -416,6 +459,7 @@ function buildIcon(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
     if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
     const onButton = !!(e.target as HTMLElement).closest("button");
@@ -529,6 +573,7 @@ function buildWindow(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;

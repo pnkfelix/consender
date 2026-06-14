@@ -75,10 +75,17 @@ html, body, #app {
   background: #fff;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 3px 10px rgba(0,0,0,0.2);
+  /* Drop shadow only when this box occludes a sibling (see .box-occluding); a
+     box sitting only over its parent stays flat, so the shadow distinguishes
+     occlusion from containment. The zero/transparent default keeps the value a
+     valid shadow-list member so the selection pulse can compose with it. */
+  --drop-shadow: 0 0 0 0 transparent;
+  box-shadow: var(--drop-shadow);
   min-width: 120px;
   min-height: 80px;
 }
+
+.box-window.box-occluding { --drop-shadow: 2px 3px 10px rgba(0,0,0,0.2); }
 
 .box-window-bar {
   cursor: grab;
@@ -197,10 +204,14 @@ html, body, #app {
   cursor: grab;
   white-space: nowrap;
   font-size: 13px;
-  box-shadow: 1px 2px 4px rgba(0,0,0,0.12);
+  /* Same occlusion-only drop shadow scheme as .box-window. */
+  --drop-shadow: 0 0 0 0 transparent;
+  box-shadow: var(--drop-shadow);
   user-select: none;
   touch-action: none;
 }
+
+.box-icon.box-occluding { --drop-shadow: 1px 2px 4px rgba(0,0,0,0.12); }
 
 .box-icon:active { cursor: grabbing; }
 
@@ -345,14 +356,15 @@ html, body, #app {
 
 /* ---- selection and focus highlights ---- */
 
-/* Selection: pulsing outer glow. Preserve each element's existing drop shadow. */
+/* Selection: pulsing outer glow. Compose with the box's occlusion drop shadow
+   (var(--drop-shadow), transparent when the box occludes nothing). */
 @keyframes window-selected-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, 2px 3px 10px rgba(0,0,0,0.2); }
-  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), 2px 3px 10px rgba(0,0,0,0.2); }
+  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, var(--drop-shadow); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), var(--drop-shadow); }
 }
 @keyframes icon-selected-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, 1px 2px 4px rgba(0,0,0,0.12); }
-  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), 1px 2px 4px rgba(0,0,0,0.12); }
+  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, var(--drop-shadow); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), var(--drop-shadow); }
 }
 .box-window.box-selected { animation: window-selected-pulse 1.4s ease-in-out infinite; }
 .box-icon.box-selected   { animation: icon-selected-pulse   1.4s ease-in-out infinite; }
