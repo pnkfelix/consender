@@ -695,15 +695,13 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
     const startY = e.clientY;
     const startBoxX = box.x;
     const startBoxY = box.y;
-    const containerW = target.parentElement?.clientWidth ?? Infinity;
     const containerH = target.parentElement?.clientHeight ?? Infinity;
     // For windows (mover provided), only the titlebar must stay in view.
     // For icons (no mover), the whole element must stay in view.
     const barH = mover !== undefined ? WINDOW_BAR_H : target.offsetHeight;
-    const barW = target.offsetWidth;
 
     const clamp = (rawX: number, rawY: number): [number, number] => [
-      Math.max(0, Math.min(rawX, containerW - barW)),
+      Math.max(0, rawX),
       Math.max(0, Math.min(rawY, containerH - barH)),
     ];
 
