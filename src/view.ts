@@ -697,15 +697,15 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
     const startBoxY = box.y;
 
     const onMove = (ev: PointerEvent): void => {
-      box.x = startBoxX + (ev.clientX - startX);
-      box.y = startBoxY + (ev.clientY - startY);
+      box.x = Math.max(0, startBoxX + (ev.clientX - startX));
+      box.y = Math.max(0, startBoxY + (ev.clientY - startY));
       target.style.left = `${box.x}px`;
       target.style.top = `${box.y}px`;
     };
 
     const onUp = (ev: PointerEvent): void => {
-      const newX = startBoxX + (ev.clientX - startX);
-      const newY = startBoxY + (ev.clientY - startY);
+      const newX = Math.max(0, startBoxX + (ev.clientX - startX));
+      const newY = Math.max(0, startBoxY + (ev.clientY - startY));
       if (newX !== startBoxX || newY !== startBoxY) {
         box.x = startBoxX;
         box.y = startBoxY;
