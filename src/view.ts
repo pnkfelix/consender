@@ -70,7 +70,7 @@ function updateHelpBar(): void {
 }
 
 function updateSelection(): void {
-  document.querySelectorAll<HTMLElement>(".box-window").forEach(el => {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
     el.classList.toggle("box-selected", el.dataset.boxId === selectedBoxId);
   });
   updateHelpBar();
@@ -384,6 +384,10 @@ function buildIcon(box: Box): HTMLElement {
   el.appendChild(expandBtn);
 
   el.dataset.boxId = box.id;
+  const policy = resolveToolbarPolicy(box);
+  el.dataset.toolbarPolicy = policy;
+  if (selectedBoxId === box.id) el.classList.add("box-selected");
+
   el.addEventListener("pointerdown", (e: PointerEvent) => {
     if (selectedBoxId !== box.id) {
       selectedBoxId = box.id;

@@ -104,6 +104,10 @@ html, body, #app {
   display: none;
 }
 
+.box-icon[data-toolbar-policy="focus"]:not(.box-selected) button {
+  display: none;
+}
+
 .box-label {
   flex-shrink: 0;
   outline: none;
