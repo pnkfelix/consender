@@ -695,17 +695,26 @@ function makeDraggable(handle: HTMLElement, box: Box, mover?: HTMLElement): void
     const startY = e.clientY;
     const startBoxX = box.x;
     const startBoxY = box.y;
+    const containerW = target.parentElement?.clientWidth ?? Infinity;
+    const containerH = target.parentElement?.clientHeight ?? Infinity;
+    // For windows (mover provided), only the titlebar must stay in view.
+    // For icons (no mover), the whole element must stay in view.
+    const barH = mover !== undefined ? WINDOW_BAR_H : target.offsetHeight;
+    const barW = target.offsetWidth;
+
+    const clamp = (rawX: number, rawY: number): [number, number] => [
+      Math.max(0, Math.min(rawX, containerW - barW)),
+      Math.max(0, Math.min(rawY, containerH - barH)),
+    ];
 
     const onMove = (ev: PointerEvent): void => {
-      box.x = Math.max(0, startBoxX + (ev.clientX - startX));
-      box.y = Math.max(0, startBoxY + (ev.clientY - startY));
+      [box.x, box.y] = clamp(startBoxX + (ev.clientX - startX), startBoxY + (ev.clientY - startY));
       target.style.left = `${box.x}px`;
       target.style.top = `${box.y}px`;
     };
 
     const onUp = (ev: PointerEvent): void => {
-      const newX = Math.max(0, startBoxX + (ev.clientX - startX));
-      const newY = Math.max(0, startBoxY + (ev.clientY - startY));
+      const [newX, newY] = clamp(startBoxX + (ev.clientX - startX), startBoxY + (ev.clientY - startY));
       if (newX !== startBoxX || newY !== startBoxY) {
         box.x = startBoxX;
         box.y = startBoxY;
