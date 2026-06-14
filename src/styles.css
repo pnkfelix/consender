@@ -344,21 +344,23 @@ html, body, #app {
 }
 
 /* ---- selection and focus highlights ---- */
-@keyframes selected-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px #4a90d9; }
-  50%       { box-shadow: 0 0 0 6px rgba(74, 144, 217, 0.25); }
-}
 
-.box-selected {
-  outline: 2px solid #4a90d9;
-  outline-offset: 1px;
-  animation: selected-pulse 1.4s ease-in-out infinite;
+/* Selection: pulsing outer glow. Preserve each element's existing drop shadow. */
+@keyframes window-selected-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, 2px 3px 10px rgba(0,0,0,0.2); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), 2px 3px 10px rgba(0,0,0,0.2); }
 }
+@keyframes icon-selected-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px #4a90d9, 1px 2px 4px rgba(0,0,0,0.12); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,144,217,0.25), 1px 2px 4px rgba(0,0,0,0.12); }
+}
+.box-window.box-selected { animation: window-selected-pulse 1.4s ease-in-out infinite; }
+.box-icon.box-selected   { animation: icon-selected-pulse   1.4s ease-in-out infinite; }
 
-.box-focused {
-  outline: 2px solid #888;
-  outline-offset: 1px;
-}
+/* Focus: amber accent stripe — on the title bar for windows, top border for icons.
+   Uses different CSS properties from selection so both show simultaneously. */
+.box-window.box-focused > .box-window-bar { box-shadow: inset 0 3px 0 0 #c8860a; }
+.box-icon.box-focused                     { border-top: 3px solid #c8860a; }
 
 /* ---- mode switcher ---- */
 .mode-switcher {
