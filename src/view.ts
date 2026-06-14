@@ -41,14 +41,35 @@ let helpEl!: HTMLDivElement;
 let occludingBoxIds = new Set<string>();
 
 // Approximate footprint of a box in its parent's coordinate space. Windows use
-// their stored geometry; icons use a nominal size since their real width depends
-// on label text (matching the icon-size approximations used elsewhere).
+// their stored geometry; icons are measured (see iconWidth) since their width
+// depends on the title plus an optional inline ": value".
 const ICON_OCCLUSION_W = 120;
 const ICON_OCCLUSION_H = 44;
 
+// Shared canvas context for measuring icon label widths in the monospace font.
+let measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCtx) return measureCtx;
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return null;
+  ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
+  measureCtx = ctx;
+  return ctx;
+}
+
+// Approximate rendered width of an icon: its title, an optional inline ": value"
+// for single-word valued icons, plus padding and the expand button.
+function iconWidth(box: Box): number {
+  const ctx = getMeasureCtx();
+  if (!ctx) return ICON_OCCLUSION_W;
+  const v = iconValueWord(box);
+  const extra = v !== null ? ctx.measureText(": " + v).width : 0;
+  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 68);
+}
+
 function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
   if (box.display === "window") return { x: box.x, y: box.y, w: box.w, h: box.h };
-  return { x: box.x, y: box.y, w: ICON_OCCLUSION_W, h: ICON_OCCLUSION_H };
+  return { x: box.x, y: box.y, w: iconWidth(box), h: ICON_OCCLUSION_H };
 }
 
 function footprintsOverlap(
@@ -518,15 +539,11 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
   if (!ctx) return layer;
   ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
 
-  const regions = box.children.map(({ title, box: c }) => ({
+  const regions = box.children.map(({ box: c }) => ({
     x: c.x,
     y: c.y,
-    w: c.display === "window" ? c.w : (() => {
-        const v = iconValueWord(c);
-        const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-        return Math.max(80, ctx.measureText(title).width + extra + 68);
-      })(),
-    h: c.display === "window" ? c.h : 44,
+    w: c.display === "window" ? c.w : iconWidth(c),
+    h: c.display === "window" ? c.h : ICON_OCCLUSION_H,
   }));
 
   // Split into paragraphs on newlines; each paragraph word-wraps independently.
