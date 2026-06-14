@@ -104,7 +104,7 @@ html, body, #app {
   display: none;
 }
 
-.box-icon[data-toolbar-policy="focus"]:not(.box-selected) button {
+.box-icon[data-toolbar-policy="focus"]:not(.box-focused) button {
   display: none;
 }
 
