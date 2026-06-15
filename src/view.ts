@@ -31,6 +31,10 @@ const selectedBoxIds = new Set<string>();
 type Mode = "select" | "act";
 let mode: Mode = "select";
 let focusedBoxId: string | null = null;
+// The parent of the focused box, highlighted so you can tell which surrounding
+// box actually contains the focus vs one it merely overlaps. Kept in sync with
+// focusedBoxId by recomputeFocusParent().
+let focusedParentBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
 
 // Ids of boxes that occlude a sibling, recomputed each render. Children are
@@ -143,9 +147,17 @@ function updateSelection(): void {
   updateHelpBar();
 }
 
+function recomputeFocusParent(): void {
+  const fb = focusedBoxId !== null ? findBox(root, focusedBoxId) : null;
+  focusedParentBoxId = fb?.parent?.id ?? null;
+}
+
 function updateFocusHighlight(): void {
+  recomputeFocusParent();
   document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
-    el.classList.toggle("box-focused", el.dataset.boxId === focusedBoxId);
+    const id = el.dataset.boxId ?? "";
+    el.classList.toggle("box-focused", id === focusedBoxId);
+    el.classList.toggle("box-focus-parent", focusedParentBoxId !== null && id === focusedParentBoxId);
   });
 }
 
@@ -254,6 +266,7 @@ function render(): void {
   if (!world) return;
   occludingBoxIds = new Set();
   collectOccluders(world, occludingBoxIds);
+  recomputeFocusParent();
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
   updateHelpBar();
@@ -480,6 +493,7 @@ function buildIcon(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (focusedParentBoxId === box.id) el.classList.add("box-focus-parent");
   if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
     if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
@@ -590,6 +604,7 @@ function buildWindow(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (focusedParentBoxId === box.id) el.classList.add("box-focus-parent");
   if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;

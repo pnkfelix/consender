@@ -374,6 +374,11 @@ html, body, #app {
 .box-window.box-focused > .box-window-bar { box-shadow: inset 0 3px 0 0 #c8860a; }
 .box-icon.box-focused                     { border-top: 3px solid #c8860a; }
 
+/* Parent of the focused box: amber inset frame around its containment area, so
+   the box that actually contains the focus is distinguishable from one the focus
+   merely overlaps. Same amber as focus, but a full frame rather than a stripe. */
+.box-window.box-focus-parent > .box-body { box-shadow: inset 0 0 0 3px #c8860a; }
+
 /* ---- mode switcher ---- */
 .mode-switcher {
   display: flex;
