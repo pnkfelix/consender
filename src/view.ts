@@ -440,7 +440,7 @@ function buildIcon(box: Box): HTMLElement {
       updateSelection();
     }
     // Eat the click so buttons hidden by focus policy don't fire on the focus-gaining tap.
-    if (!wasFocused && policy === "focus") {
+    if (!wasFocused && policy === "focus" && !onButton) {
       el.addEventListener("click", (ce) => ce.stopPropagation(), { capture: true, once: true });
     }
     e.stopPropagation();
@@ -563,7 +563,7 @@ function buildWindow(box: Box): HTMLElement {
       updateSelection();
     }
     // Eat the click so buttons hidden by focus policy don't fire on the focus-gaining tap.
-    if (!wasFocused && policy === "focus") {
+    if (!wasFocused && policy === "focus" && !onButton) {
       el.addEventListener("click", (ce) => ce.stopPropagation(), { capture: true, once: true });
     }
     e.stopPropagation();
