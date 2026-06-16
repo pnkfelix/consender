@@ -1,9 +1,11 @@
-import { applyOp, findBox, mkSetDisplay, persist } from "./history.js";
+import { applyOp, findBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
 import type { Box, Op } from "./model.js";
+import { getBoxTitle } from "./model.js";
 
 interface ScriptContext {
   root: Box;
   worldId: string;
+  focusedBoxId: string | null;
   selectedBoxIds: Set<string>;
   pendingOps: Op[];
 }
@@ -26,16 +28,29 @@ const BUILTINS: Record<string, Word> = {
   "clear-focus": (ctx) => {
     ctx.selectedBoxIds.clear();
   },
+  "link-selection-to-focus": (ctx) => {
+    if (!ctx.focusedBoxId) return;
+    const focusBox = findBox(ctx.root, ctx.focusedBoxId);
+    if (!focusBox) return;
+    let insertIdx = focusBox.children.length;
+    for (const id of ctx.selectedBoxIds) {
+      if (id === ctx.focusedBoxId) continue;
+      const target = findBox(ctx.root, id);
+      if (!target) continue;
+      ctx.pendingOps.push(mkAddPointer(focusBox, id, getBoxTitle(target), insertIdx++));
+    }
+  },
 };
 
 export function runScript(
   scriptText: string,
   root: Box,
   worldId: string,
-  selectedBoxIds: Set<string>
+  selectedBoxIds: Set<string>,
+  focusedBoxId: string | null = null
 ): { root: Box; worldId: string } {
   const tokens = scriptText.trim().split(/\s+/).filter(Boolean);
-  const ctx: ScriptContext = { root, worldId, selectedBoxIds, pendingOps: [] };
+  const ctx: ScriptContext = { root, worldId, focusedBoxId, selectedBoxIds, pendingOps: [] };
 
   for (const token of tokens) {
     const word = BUILTINS[token];

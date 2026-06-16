@@ -66,6 +66,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
     w: box.w,
     h: box.h,
     text: box.text || undefined,
+    pointerToId: box.pointerToId,
   };
   for (const { box: child } of box.children) {
     collectSubtree(child, acc);
@@ -111,6 +112,7 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
       w: s.w,
       h: s.h,
       text: s.text ?? "",
+      pointerToId: s.pointerToId,
       undoStack: [],
       redoStack: [],
     };
@@ -138,6 +140,7 @@ function collectPersistedSubtree(
     w: box.w,
     h: box.h,
     text: box.text || undefined,
+    pointerToId: box.pointerToId,
     undoStack: box.undoStack,
     redoStack: box.redoStack,
   };
@@ -188,6 +191,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
       w: s.w,
       h: s.h,
       text: s.text ?? "",
+      pointerToId: s.pointerToId,
       undoStack: migrateStackEntries(s.undoStack ?? []),
       redoStack: migrateStackEntries(s.redoStack ?? []),
     };
@@ -665,13 +669,15 @@ function findClearSpot(
 function freshBoxPosition(
   parent: Box,
   pw: number,
-  ph: number
+  ph: number,
+  extraSiblings: Array<{ x: number; y: number; w: number; h: number; display: DisplayMode }> = []
 ): { x: number; y: number } {
   const kids = parent.children.map(nc => nc.box);
+  const all = extraSiblings.length > 0 ? ([...kids, ...extraSiblings] as Box[]) : kids;
 
-  if (kids.length >= 2) {
-    const last = kids[kids.length - 1];
-    const prev = kids[kids.length - 2];
+  if (all.length >= 2) {
+    const last = all[all.length - 1];
+    const prev = all[all.length - 2];
     const lx = last.x + (last.x - prev.x);
     const ly = last.y + (last.y - prev.y);
     if (boxFitsInParent(lx, ly, NEW_BOX_W, NEW_BOX_H, pw, ph)) {
@@ -679,7 +685,7 @@ function freshBoxPosition(
     }
   }
 
-  const spot = findClearSpot(kids, pw, ph, NEW_BOX_W, NEW_BOX_H);
+  const spot = findClearSpot(all, pw, ph, NEW_BOX_W, NEW_BOX_H);
   if (spot) return spot;
 
   return { x: 20 + Math.random() * 80, y: 20 + Math.random() * 60 };
@@ -710,6 +716,36 @@ export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
     index: parent.children.length,
     title: "",
     subtree,
+  };
+}
+
+export function mkAddPointer(
+  parent: Box,
+  targetId: string,
+  title: string,
+  index: number
+): Op {
+  const id = freshId();
+  const pw = parent.w;
+  const ph = Math.max(0, parent.h - BAR_H);
+  const { x, y } = freshBoxPosition(parent, pw, ph);
+  const serialized: SerializedBox = {
+    id,
+    display: "window",
+    children: [],
+    parentId: parent.id,
+    x,
+    y,
+    w: NEW_BOX_W,
+    h: NEW_BOX_H,
+    pointerToId: targetId,
+  };
+  return {
+    kind: "AddBox",
+    parentId: parent.id,
+    index,
+    title,
+    subtree: { rootId: id, boxes: { [id]: serialized } },
   };
 }
 
