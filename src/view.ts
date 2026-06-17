@@ -108,10 +108,12 @@ const helpMap: Record<string, string> = {
     "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup; " +
     "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
+  "script": "Tag: adding a child box named \"script\" marks the parent as a command script box. " +
+    "The command list lives in the parent's own text. The child itself needs no content.",
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
     "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
-  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render.",
+  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
@@ -188,6 +190,14 @@ function getBoxRenderMode(box: Box): string {
   if (!renderChild) return "text";
   const mode = renderChild.box.text.trim().toLowerCase();
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
+}
+
+// Returns the box's own text if it is tagged as a command script box (has a child named "script"),
+// or null if it has no such child. The "script" child is a structural tag only — its own
+// text is irrelevant; the command list lives in the parent's text field.
+function getBoxScript(box: Box): string | null {
+  if (!box.children.some(c => c.title === "script")) return null;
+  return box.text.trim();
 }
 
 function buildSvgLayer(box: Box): HTMLElement {
@@ -307,6 +317,22 @@ function buildWorld(box: Box): HTMLElement {
     }
   };
   bar.appendChild(outBtn);
+
+  const worldScript = getBoxScript(box);
+  if (worldScript !== null) {
+    const runBtn = document.createElement("button");
+    runBtn.title = "run script";
+    runBtn.textContent = "▶";
+    runBtn.disabled = worldScript.length === 0;
+    runBtn.onclick = () => {
+      if (!worldScript) return;
+      const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(runBtn);
+  }
 
   const isRawMode = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
 
@@ -477,13 +503,16 @@ function buildIcon(box: Box): HTMLElement {
     el.appendChild(valueSpan);
   }
 
-  if (box.text.trim().length > 0) {
+  const iconScript = getBoxScript(box);
+  if (iconScript !== null) {
     const runBtn = document.createElement("button");
     runBtn.className = "box-run-btn";
     runBtn.title = "run script";
     runBtn.textContent = "▶";
+    runBtn.disabled = iconScript.length === 0;
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
+      if (!iconScript) return;
+      const result = runScript(iconScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -668,12 +697,15 @@ function buildWindow(box: Box): HTMLElement {
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
 
-  if (!isPointer && box.text.trim().length > 0) {
+  const windowScript = !isPointer ? getBoxScript(effectiveBox) : null;
+  if (windowScript !== null) {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
+    runBtn.disabled = windowScript.length === 0;
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
+      if (!windowScript) return;
+      const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
