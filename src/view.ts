@@ -108,8 +108,8 @@ const helpMap: Record<string, string> = {
     "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup; " +
     "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
-  "script": "Child-box property: marks its parent as a command script box. " +
-    "The script text lives in this child's text field and is run when the parent's ▶ button is pressed.",
+  "script": "Tag: adding a child box named \"script\" marks the parent as a command script box. " +
+    "The command list lives in the parent's own text. The child itself needs no content.",
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
     "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
@@ -192,13 +192,12 @@ function getBoxRenderMode(box: Box): string {
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
-// Returns the script text for a box if it has a "script" child, or null if no such child exists.
-// Returns "" (empty string) when the child exists but has no text — the button still appears,
-// signalling "this is a script box", but clicking does nothing until text is added.
+// Returns the box's own text if it is tagged as a command script box (has a child named "script"),
+// or null if it has no such child. The "script" child is a structural tag only — its own
+// text is irrelevant; the command list lives in the parent's text field.
 function getBoxScript(box: Box): string | null {
-  const scriptChild = box.children.find(c => c.title === "script");
-  if (!scriptChild) return null;
-  return scriptChild.box.text.trim();
+  if (!box.children.some(c => c.title === "script")) return null;
+  return box.text.trim();
 }
 
 function buildSvgLayer(box: Box): HTMLElement {
