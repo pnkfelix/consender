@@ -402,6 +402,7 @@ function buildIcon(box: Box): HTMLElement {
 
   if (box.text.trim().length > 0) {
     const runBtn = document.createElement("button");
+    runBtn.className = "box-run-btn";
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
