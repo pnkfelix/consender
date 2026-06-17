@@ -103,6 +103,15 @@ jobs:
             printf '%s\n' '</body>' '</html>'
           } > combined/preview/index.html
 
+      - name: Write build manifest
+        run: |
+          {
+            echo "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "main-sha: ${{ github.sha }}"
+            echo "run: ${{ github.run_id }}/${{ github.run_attempt }}"
+            echo "trigger: ${{ github.event_name }}"
+          } > combined/_build-manifest.txt
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: combined
