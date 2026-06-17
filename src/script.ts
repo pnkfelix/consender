@@ -28,7 +28,7 @@ const BUILTINS: Record<string, Word> = {
   "clear-focus": (ctx) => {
     ctx.selectedBoxIds.clear();
   },
-  "link-selection-to-focus": (ctx) => {
+  "link": (ctx) => {
     if (!ctx.focusedBoxId) return;
     const focusBox = findBox(ctx.root, ctx.focusedBoxId);
     if (!focusBox) return;
