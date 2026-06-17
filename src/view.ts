@@ -108,10 +108,12 @@ const helpMap: Record<string, string> = {
     "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup; " +
     "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
+  "script": "Child-box property: marks its parent as a command script box. " +
+    "The script text lives in this child's text field and is run when the parent's ▶ button is pressed.",
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
     "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
-  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render.",
+  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
@@ -188,6 +190,17 @@ function getBoxRenderMode(box: Box): string {
   if (!renderChild) return "text";
   const mode = renderChild.box.text.trim().toLowerCase();
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
+}
+
+// Returns the script text to run for a box: the "script" child's text if present, else the box's own text.
+function getBoxScript(box: Box): string | null {
+  const scriptChild = box.children.find(c => c.title === "script");
+  if (scriptChild) {
+    const t = scriptChild.box.text.trim();
+    return t.length > 0 ? t : null;
+  }
+  const t = box.text.trim();
+  return t.length > 0 ? t : null;
 }
 
 function buildSvgLayer(box: Box): HTMLElement {
@@ -477,13 +490,14 @@ function buildIcon(box: Box): HTMLElement {
     el.appendChild(valueSpan);
   }
 
-  if (box.text.trim().length > 0) {
+  const iconScript = getBoxScript(box);
+  if (iconScript !== null) {
     const runBtn = document.createElement("button");
     runBtn.className = "box-run-btn";
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
+      const result = runScript(iconScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -668,12 +682,13 @@ function buildWindow(box: Box): HTMLElement {
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
 
-  if (!isPointer && box.text.trim().length > 0) {
+  const windowScript = !isPointer ? getBoxScript(effectiveBox) : null;
+  if (windowScript !== null) {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
+      const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
