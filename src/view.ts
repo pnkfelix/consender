@@ -109,11 +109,17 @@ const helpMap: Record<string, string> = {
     "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
     "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
   "script": "Tag: adding a child box named \"script\" marks the parent as a command script box. " +
-    "The command list lives in the parent's own text. The child itself needs no content.",
+    "The command list lives in the parent's own text. The child itself needs no content. " +
+    "See the builtinCommands entry for available commands.",
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
     "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
   "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script.",
+  "builtinCommands": "Primitive script commands: " +
+    "iconify — set selected boxes to icon display; " +
+    "windowify — set selected boxes to window display; " +
+    "clear-focus — deselect all boxes; " +
+    "link — add pointer children in the focused box pointing to each selected box.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
