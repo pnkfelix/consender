@@ -678,6 +678,9 @@ function buildWindow(box: Box): HTMLElement {
     ribbon.appendChild(redoBtn);
   }
 
+  if (isPointer) {
+    console.log("[pointer]", box.id, "→", box.pointerToId, "target:", pointerTarget?.id ?? "NOT FOUND", "renderMode:", getBoxRenderMode(effectiveBox));
+  }
   const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
   if (renderToggleW) ribbon.appendChild(renderToggleW);
 
