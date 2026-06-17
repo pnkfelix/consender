@@ -32,13 +32,18 @@ const BUILTINS: Record<string, Word> = {
     if (!ctx.focusedBoxId) return;
     const focusBox = findBox(ctx.root, ctx.focusedBoxId);
     if (!focusBox) return;
-    let insertIdx = focusBox.children.length;
+    // If the focused box is a pointer, insert into the target so the result is
+    // visible (the UI renders the target's children, not the pointer's own).
+    const destId = focusBox.pointerToId ?? ctx.focusedBoxId;
+    const destBox = focusBox.pointerToId ? findBox(ctx.root, focusBox.pointerToId) : focusBox;
+    if (!destBox) return;
+    let insertIdx = destBox.children.length;
     const newIds: string[] = [];
     for (const id of ctx.selectedBoxIds) {
-      if (id === ctx.focusedBoxId) continue;
+      if (id === destId) continue;
       const target = findBox(ctx.root, id);
       if (!target) continue;
-      const op = mkAddPointer(focusBox, id, getBoxTitle(target), insertIdx++);
+      const op = mkAddPointer(destBox, id, getBoxTitle(target), insertIdx++);
       if (op.kind === "AddBox") newIds.push(op.subtree.rootId);
       ctx.pendingOps.push(op);
     }
