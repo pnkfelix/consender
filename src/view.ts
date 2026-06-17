@@ -678,6 +678,9 @@ function buildWindow(box: Box): HTMLElement {
     ribbon.appendChild(redoBtn);
   }
 
+  const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
+  if (renderToggleW) ribbon.appendChild(renderToggleW);
+
   let textBtn: HTMLButtonElement | null = null;
   if (!isPointer) {
     textBtn = document.createElement("button");
@@ -685,9 +688,6 @@ function buildWindow(box: Box): HTMLElement {
     textBtn.textContent = "T";
     if (box.text) textBtn.classList.add("box-btn-has-text");
     ribbon.appendChild(textBtn);
-
-    const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
-    if (renderToggleW) ribbon.appendChild(renderToggleW);
 
     if (isRawModeW) {
       const collapseBtn = document.createElement("button");
