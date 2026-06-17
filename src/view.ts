@@ -318,6 +318,20 @@ function buildWorld(box: Box): HTMLElement {
   };
   bar.appendChild(outBtn);
 
+  const worldScript = getBoxScript(box);
+  if (worldScript !== null) {
+    const runBtn = document.createElement("button");
+    runBtn.title = "run script";
+    runBtn.textContent = "▶";
+    runBtn.onclick = () => {
+      const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    bar.appendChild(runBtn);
+  }
+
   const isRawMode = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
 
   if (isRawMode) {
