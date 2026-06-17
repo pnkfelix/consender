@@ -431,12 +431,17 @@ function buildIcon(box: Box): HTMLElement {
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
+    const wasFocused = focusedBoxId === box.id;
+    if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
     const onButton = !!(e.target as HTMLElement).closest("button");
     if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
       updateSelection();
+    }
+    // Eat the click so buttons hidden by focus policy don't fire on the focus-gaining tap.
+    if (!wasFocused && policy === "focus" && !onButton) {
+      el.addEventListener("click", (ce) => ce.stopPropagation(), { capture: true, once: true });
     }
     e.stopPropagation();
   });
@@ -549,12 +554,17 @@ function buildWindow(box: Box): HTMLElement {
   el.style.height = `${box.h}px`;
 
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    if (focusedBoxId !== box.id) { focusedBoxId = box.id; updateFocusHighlight(); }
+    const wasFocused = focusedBoxId === box.id;
+    if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
     const onButton = !!(e.target as HTMLElement).closest("button");
     if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
       updateSelection();
+    }
+    // Eat the click so buttons hidden by focus policy don't fire on the focus-gaining tap.
+    if (!wasFocused && policy === "focus" && !onButton) {
+      el.addEventListener("click", (ce) => ce.stopPropagation(), { capture: true, once: true });
     }
     e.stopPropagation();
   });
