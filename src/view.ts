@@ -192,12 +192,13 @@ function getBoxRenderMode(box: Box): string {
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
-// Returns the script text to run for a box, or null if the box has no "script" child.
+// Returns the script text for a box if it has a "script" child, or null if no such child exists.
+// Returns "" (empty string) when the child exists but has no text — the button still appears,
+// signalling "this is a script box", but clicking does nothing until text is added.
 function getBoxScript(box: Box): string | null {
   const scriptChild = box.children.find(c => c.title === "script");
   if (!scriptChild) return null;
-  const t = scriptChild.box.text.trim();
-  return t.length > 0 ? t : null;
+  return scriptChild.box.text.trim();
 }
 
 function buildSvgLayer(box: Box): HTMLElement {
@@ -323,7 +324,9 @@ function buildWorld(box: Box): HTMLElement {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
+    runBtn.disabled = worldScript.length === 0;
     runBtn.onclick = () => {
+      if (!worldScript) return;
       const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -507,7 +510,9 @@ function buildIcon(box: Box): HTMLElement {
     runBtn.className = "box-run-btn";
     runBtn.title = "run script";
     runBtn.textContent = "▶";
+    runBtn.disabled = iconScript.length === 0;
     runBtn.onclick = () => {
+      if (!iconScript) return;
       const result = runScript(iconScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -698,7 +703,9 @@ function buildWindow(box: Box): HTMLElement {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
+    runBtn.disabled = windowScript.length === 0;
     runBtn.onclick = () => {
+      if (!windowScript) return;
       const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
