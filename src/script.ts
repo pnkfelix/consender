@@ -33,12 +33,17 @@ const BUILTINS: Record<string, Word> = {
     const focusBox = findBox(ctx.root, ctx.focusedBoxId);
     if (!focusBox) return;
     let insertIdx = focusBox.children.length;
+    const newIds: string[] = [];
     for (const id of ctx.selectedBoxIds) {
       if (id === ctx.focusedBoxId) continue;
       const target = findBox(ctx.root, id);
       if (!target) continue;
-      ctx.pendingOps.push(mkAddPointer(focusBox, id, getBoxTitle(target), insertIdx++));
+      const op = mkAddPointer(focusBox, id, getBoxTitle(target), insertIdx++);
+      if (op.kind === "AddBox") newIds.push(op.subtree.rootId);
+      ctx.pendingOps.push(op);
     }
+    ctx.selectedBoxIds.clear();
+    for (const id of newIds) ctx.selectedBoxIds.add(id);
   },
 };
 
