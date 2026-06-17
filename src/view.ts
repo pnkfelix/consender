@@ -406,7 +406,7 @@ function buildIcon(box: Box): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds);
+      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
