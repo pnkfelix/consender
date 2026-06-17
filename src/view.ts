@@ -135,17 +135,17 @@ function buildRenderLayer(box: Box): HTMLElement {
   return mode === "markdown" ? buildMarkdownLayer(box) : buildSvgLayer(box);
 }
 
-function buildRenderToggleBtn(box: Box): HTMLButtonElement | null {
+function buildRenderToggleBtn(box: Box, rawToggleId = box.id): HTMLButtonElement | null {
   const mode = getBoxRenderMode(box);
   if (mode === "text") return null;
-  const isRaw = rawViewBoxIds.has(box.id);
+  const isRaw = rawViewBoxIds.has(rawToggleId);
   const btn = document.createElement("button");
   btn.title = isRaw ? `render as ${mode}` : "show raw source";
   btn.textContent = isRaw ? mode : "raw";
   if (!isRaw) btn.classList.add("box-btn-rendering");
   btn.onclick = () => {
-    if (rawViewBoxIds.has(box.id)) rawViewBoxIds.delete(box.id);
-    else rawViewBoxIds.add(box.id);
+    if (rawViewBoxIds.has(rawToggleId)) rawViewBoxIds.delete(rawToggleId);
+    else rawViewBoxIds.add(rawToggleId);
     render();
   };
   return btn;
@@ -543,6 +543,7 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
 function buildWindow(box: Box): HTMLElement {
   const isPointer = !!box.pointerToId;
   const pointerTarget = isPointer ? findBox(root, box.pointerToId!) : null;
+  const effectiveBox = pointerTarget ?? box;
 
   const el = document.createElement("div");
   el.className = isPointer ? "box-window box-pointer" : "box-window";
@@ -649,7 +650,7 @@ function buildWindow(box: Box): HTMLElement {
   }
   ribbon.appendChild(fullBtn);
 
-  const isRawModeW = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
+  const isRawModeW = getBoxRenderMode(effectiveBox) === "text" || rawViewBoxIds.has(box.id);
 
   if (isRawModeW) {
     const undoBtn = document.createElement("button");
@@ -685,7 +686,7 @@ function buildWindow(box: Box): HTMLElement {
     if (box.text) textBtn.classList.add("box-btn-has-text");
     ribbon.appendChild(textBtn);
 
-    const renderToggleW = buildRenderToggleBtn(box);
+    const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
     if (renderToggleW) ribbon.appendChild(renderToggleW);
 
     if (isRawModeW) {
@@ -723,29 +724,22 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
 
-  if (isPointer) {
-    if (!pointerTarget) {
-      const msg = document.createElement("div");
-      msg.className = "box-pointer-missing";
-      msg.textContent = "⚠ reference not found";
-      body.appendChild(msg);
-    } else if (pointerTarget.text) {
-      const preview = document.createElement("div");
-      preview.className = "box-pointer-preview";
-      preview.textContent = pointerTarget.text;
-      body.appendChild(preview);
-    }
+  if (isPointer && !pointerTarget) {
+    const msg = document.createElement("div");
+    msg.className = "box-pointer-missing";
+    msg.textContent = "⚠ reference not found";
+    body.appendChild(msg);
   } else {
     const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
-    const isRenderedWindow = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
+    const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
 
     if (!isRenderedWindow) {
-      for (const { box: child } of box.children) {
+      for (const { box: child } of effectiveBox.children) {
         body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
       }
     }
-    if (box.text) {
-      const layer = isRenderedWindow ? buildRenderLayer(box) : buildTextLayer(box);
+    if (effectiveBox.text) {
+      const layer = isRenderedWindow ? buildRenderLayer(effectiveBox) : buildTextLayer(effectiveBox);
       if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
       body.insertBefore(layer, body.firstChild);
     }

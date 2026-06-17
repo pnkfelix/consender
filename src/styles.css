@@ -359,18 +359,6 @@ html, body, #app {
   flex-shrink: 0;
 }
 
-.box-pointer-preview {
-  position: absolute;
-  inset: 0;
-  padding: 8px;
-  font-size: 13px;
-  line-height: 1.55;
-  overflow: auto;
-  pointer-events: none;
-  color: var(--ink);
-  opacity: 0.75;
-}
-
 .box-pointer-missing {
   padding: 8px;
   font-size: 13px;
