@@ -192,14 +192,11 @@ function getBoxRenderMode(box: Box): string {
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
-// Returns the script text to run for a box: the "script" child's text if present, else the box's own text.
+// Returns the script text to run for a box, or null if the box has no "script" child.
 function getBoxScript(box: Box): string | null {
   const scriptChild = box.children.find(c => c.title === "script");
-  if (scriptChild) {
-    const t = scriptChild.box.text.trim();
-    return t.length > 0 ? t : null;
-  }
-  const t = box.text.trim();
+  if (!scriptChild) return null;
+  const t = scriptChild.box.text.trim();
   return t.length > 0 ? t : null;
 }
 
