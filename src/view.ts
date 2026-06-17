@@ -400,6 +400,20 @@ function buildIcon(box: Box): HTMLElement {
     el.appendChild(valueSpan);
   }
 
+  if (box.text.trim().length > 0) {
+    const runBtn = document.createElement("button");
+    runBtn.className = "box-run-btn";
+    runBtn.title = "run script";
+    runBtn.textContent = "▶";
+    runBtn.onclick = () => {
+      const result = runScript(box.text, root, worldId, selectedBoxIds);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    el.appendChild(runBtn);
+  }
+
   const expandBtn = document.createElement("button");
   expandBtn.title = "expand";
   expandBtn.textContent = "⬜";
