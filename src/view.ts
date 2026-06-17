@@ -31,7 +31,73 @@ const selectedBoxIds = new Set<string>();
 type Mode = "select" | "act";
 let mode: Mode = "select";
 let focusedBoxId: string | null = null;
+// The parent of the focused box, highlighted so you can tell which surrounding
+// box actually contains the focus vs one it merely overlaps. Kept in sync with
+// focusedBoxId by recomputeFocusParent().
+let focusedParentBoxId: string | null = null;
 let helpEl!: HTMLDivElement;
+
+// Ids of boxes that occlude a sibling, recomputed each render. Children are
+// already clipped to their parent, so the only thing behind a box that is not
+// its parent is an overlapping sibling painted underneath it. Such boxes cast a
+// drop shadow so "floating over a sibling" reads as distinct from "nested in a
+// parent"; a box sitting only over its parent stays flat.
+let occludingBoxIds = new Set<string>();
+
+// Approximate footprint of a box in its parent's coordinate space. Windows use
+// their stored geometry; icons are measured (see iconWidth) since their width
+// depends on the title plus an optional inline ": value".
+const ICON_OCCLUSION_W = 120;
+const ICON_OCCLUSION_H = 44;
+
+// Shared canvas context for measuring icon label widths in the monospace font.
+let measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCtx) return measureCtx;
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return null;
+  ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
+  measureCtx = ctx;
+  return ctx;
+}
+
+// Approximate rendered width of an icon: its title, an optional inline ": value"
+// for single-word valued icons, plus padding and the expand button.
+function iconWidth(box: Box): number {
+  const ctx = getMeasureCtx();
+  if (!ctx) return ICON_OCCLUSION_W;
+  const v = iconValueWord(box);
+  const extra = v !== null ? ctx.measureText(": " + v).width : 0;
+  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 68);
+}
+
+function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
+  if (box.display === "window") return { x: box.x, y: box.y, w: box.w, h: box.h };
+  return { x: box.x, y: box.y, w: iconWidth(box), h: ICON_OCCLUSION_H };
+}
+
+function footprintsOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+// A box occludes a sibling when it overlaps another child painted behind it
+// (earlier in its parent's child order, since later children paint on top).
+function collectOccluders(box: Box, out: Set<string>): void {
+  const kids = box.children;
+  for (let i = 0; i < kids.length; i++) {
+    const fi = boxFootprint(kids[i].box);
+    for (let j = 0; j < i; j++) {
+      if (footprintsOverlap(fi, boxFootprint(kids[j].box))) {
+        out.add(kids[i].box.id);
+        break;
+      }
+    }
+  }
+  for (const { box: child } of kids) collectOccluders(child, out);
+}
 
 // Map box labels to context-sensitive help text shown in the help bar.
 const helpMap: Record<string, string> = {
@@ -81,9 +147,17 @@ function updateSelection(): void {
   updateHelpBar();
 }
 
+function recomputeFocusParent(): void {
+  const fb = focusedBoxId !== null ? findBox(root, focusedBoxId) : null;
+  focusedParentBoxId = fb?.parent?.id ?? null;
+}
+
 function updateFocusHighlight(): void {
+  recomputeFocusParent();
   document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
-    el.classList.toggle("box-focused", el.dataset.boxId === focusedBoxId);
+    const id = el.dataset.boxId ?? "";
+    el.classList.toggle("box-focused", id === focusedBoxId);
+    el.classList.toggle("box-focus-parent", focusedParentBoxId !== null && id === focusedParentBoxId);
   });
 }
 
@@ -190,6 +264,9 @@ export function mount(app: HTMLElement): void {
 function render(): void {
   const world = findBox(root, worldId);
   if (!world) return;
+  occludingBoxIds = new Set();
+  collectOccluders(world, occludingBoxIds);
+  recomputeFocusParent();
   appEl.innerHTML = "";
   appEl.appendChild(buildWorld(world));
   updateHelpBar();
@@ -430,6 +507,8 @@ function buildIcon(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (focusedParentBoxId === box.id) el.classList.add("box-focus-parent");
+  if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
     const wasFocused = focusedBoxId === box.id;
     if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
@@ -493,15 +572,11 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
   if (!ctx) return layer;
   ctx.font = `${TEXT_SIZE}px ui-monospace, Menlo, Consolas, monospace`;
 
-  const regions = box.children.map(({ title, box: c }) => ({
+  const regions = box.children.map(({ box: c }) => ({
     x: c.x,
     y: c.y,
-    w: c.display === "window" ? c.w : (() => {
-        const v = iconValueWord(c);
-        const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-        return Math.max(80, ctx.measureText(title).width + extra + 68);
-      })(),
-    h: c.display === "window" ? c.h : 44,
+    w: c.display === "window" ? c.w : iconWidth(c),
+    h: c.display === "window" ? c.h : ICON_OCCLUSION_H,
   }));
 
   // Split into paragraphs on newlines; each paragraph word-wraps independently.
@@ -548,6 +623,8 @@ function buildWindow(box: Box): HTMLElement {
   el.dataset.toolbarPolicy = policy;
   if (selectedBoxIds.has(box.id)) el.classList.add("box-selected");
   if (focusedBoxId === box.id) el.classList.add("box-focused");
+  if (focusedParentBoxId === box.id) el.classList.add("box-focus-parent");
+  if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
   el.style.width = `${box.w}px`;
