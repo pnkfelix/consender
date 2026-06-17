@@ -354,6 +354,29 @@ html, body, #app {
   color: #8cc8f0 !important;
 }
 
+/* ---- pointer (reference) boxes ---- */
+.box-window.box-pointer {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.box-icon.box-pointer {
+  border-style: dashed;
+}
+
+.box-pointer-glyph {
+  opacity: 0.55;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.box-pointer-missing {
+  padding: 8px;
+  font-size: 13px;
+  opacity: 0.5;
+  font-style: italic;
+}
+
 /* ---- selection and focus highlights ---- */
 
 /* Selection: pulsing outer glow. Compose with the box's occlusion drop shadow

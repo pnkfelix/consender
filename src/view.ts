@@ -209,17 +209,17 @@ function buildRenderLayer(box: Box): HTMLElement {
   return mode === "markdown" ? buildMarkdownLayer(box) : buildSvgLayer(box);
 }
 
-function buildRenderToggleBtn(box: Box): HTMLButtonElement | null {
+function buildRenderToggleBtn(box: Box, rawToggleId = box.id): HTMLButtonElement | null {
   const mode = getBoxRenderMode(box);
   if (mode === "text") return null;
-  const isRaw = rawViewBoxIds.has(box.id);
+  const isRaw = rawViewBoxIds.has(rawToggleId);
   const btn = document.createElement("button");
   btn.title = isRaw ? `render as ${mode}` : "show raw source";
   btn.textContent = isRaw ? mode : "raw";
   if (!isRaw) btn.classList.add("box-btn-rendering");
   btn.onclick = () => {
-    if (rawViewBoxIds.has(box.id)) rawViewBoxIds.delete(box.id);
-    else rawViewBoxIds.add(box.id);
+    if (rawViewBoxIds.has(rawToggleId)) rawViewBoxIds.delete(rawToggleId);
+    else rawViewBoxIds.add(rawToggleId);
     render();
   };
   return btn;
@@ -483,7 +483,7 @@ function buildIcon(box: Box): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds);
+      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -510,9 +510,9 @@ function buildIcon(box: Box): HTMLElement {
   if (focusedParentBoxId === box.id) el.classList.add("box-focus-parent");
   if (occludingBoxIds.has(box.id)) el.classList.add("box-occluding");
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    const wasFocused = focusedBoxId === box.id;
-    if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
     const onButton = !!(e.target as HTMLElement).closest("button");
+    const wasFocused = focusedBoxId === box.id;
+    if (!wasFocused && !onButton) { focusedBoxId = box.id; updateFocusHighlight(); }
     if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
@@ -616,8 +616,12 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
 }
 
 function buildWindow(box: Box): HTMLElement {
+  const isPointer = !!box.pointerToId;
+  const pointerTarget = isPointer ? findBox(root, box.pointerToId!) : null;
+  const effectiveBox = pointerTarget ?? box;
+
   const el = document.createElement("div");
-  el.className = "box-window";
+  el.className = isPointer ? "box-window box-pointer" : "box-window";
   el.dataset.boxId = box.id;
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
@@ -631,9 +635,9 @@ function buildWindow(box: Box): HTMLElement {
   el.style.height = `${box.h}px`;
 
   el.addEventListener("pointerdown", (e: PointerEvent) => {
-    const wasFocused = focusedBoxId === box.id;
-    if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
     const onButton = !!(e.target as HTMLElement).closest("button");
+    const wasFocused = focusedBoxId === box.id;
+    if (!wasFocused && !onButton) { focusedBoxId = box.id; updateFocusHighlight(); }
     if (!onButton && mode === "select") {
       if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
       else selectedBoxIds.add(box.id);
@@ -649,6 +653,13 @@ function buildWindow(box: Box): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
 
+  if (isPointer) {
+    const glyph = document.createElement("span");
+    glyph.className = "box-pointer-glyph";
+    glyph.textContent = "→";
+    bar.appendChild(glyph);
+  }
+
   const label = document.createElement("span");
   label.className = "box-label";
   label.textContent = getBoxTitle(box);
@@ -657,12 +668,12 @@ function buildWindow(box: Box): HTMLElement {
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
 
-  if (box.text.trim().length > 0) {
+  if (!isPointer && box.text.trim().length > 0) {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.onclick = () => {
-      const result = runScript(box.text, root, worldId, selectedBoxIds);
+      const result = runScript(box.text, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -696,16 +707,27 @@ function buildWindow(box: Box): HTMLElement {
   ribbon.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
-  fullBtn.title = "zoom in";
-  fullBtn.textContent = "⛶";
-  fullBtn.onclick = () => {
-    worldId = box.id;
-    persist(root, worldId);
-    render();
-  };
+  if (isPointer && pointerTarget) {
+    fullBtn.title = "go to referenced box";
+    fullBtn.textContent = "⤢";
+    fullBtn.onclick = () => {
+      worldId = pointerTarget.parent ? pointerTarget.parent.id : pointerTarget.id;
+      focusedBoxId = pointerTarget.id;
+      persist(root, worldId);
+      render();
+    };
+  } else {
+    fullBtn.title = "zoom in";
+    fullBtn.textContent = "⛶";
+    fullBtn.onclick = () => {
+      worldId = box.id;
+      persist(root, worldId);
+      render();
+    };
+  }
   ribbon.appendChild(fullBtn);
 
-  const isRawModeW = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
+  const isRawModeW = getBoxRenderMode(effectiveBox) === "text" || rawViewBoxIds.has(box.id);
 
   if (isRawModeW) {
     const undoBtn = document.createElement("button");
@@ -733,32 +755,35 @@ function buildWindow(box: Box): HTMLElement {
     ribbon.appendChild(redoBtn);
   }
 
-  const textBtn = document.createElement("button");
-  textBtn.title = "edit text";
-  textBtn.textContent = "T";
-  if (box.text) textBtn.classList.add("box-btn-has-text");
-  ribbon.appendChild(textBtn);
-
-  const renderToggleW = buildRenderToggleBtn(box);
+  const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
   if (renderToggleW) ribbon.appendChild(renderToggleW);
 
-  if (isRawModeW) {
-    const collapseBtn = document.createElement("button");
-    collapseBtn.title = "collapse into parent";
-    collapseBtn.textContent = "⤵";
-    collapseBtn.onclick = () => {
-      if (!box.parent) return;
-      const op = mkCollapseBox(box);
-      const result = recordOn(root, worldId, op);
-      root = result.root;
-      worldId = result.worldId;
-      render();
-    };
-    ribbon.appendChild(collapseBtn);
+  let textBtn: HTMLButtonElement | null = null;
+  if (!isPointer) {
+    textBtn = document.createElement("button");
+    textBtn.title = "edit text";
+    textBtn.textContent = "T";
+    if (box.text) textBtn.classList.add("box-btn-has-text");
+    ribbon.appendChild(textBtn);
+
+    if (isRawModeW) {
+      const collapseBtn = document.createElement("button");
+      collapseBtn.title = "collapse into parent";
+      collapseBtn.textContent = "⤵";
+      collapseBtn.onclick = () => {
+        if (!box.parent) return;
+        const op = mkCollapseBox(box);
+        const result = recordOn(root, worldId, op);
+        root = result.root;
+        worldId = result.worldId;
+        render();
+      };
+      ribbon.appendChild(collapseBtn);
+    }
   }
 
   const delBtn = document.createElement("button");
-  delBtn.title = "delete";
+  delBtn.title = isPointer ? "unlink" : "delete";
   delBtn.textContent = "✕";
   delBtn.onclick = () => {
     if (!box.parent) return;
@@ -775,23 +800,31 @@ function buildWindow(box: Box): HTMLElement {
 
   const body = document.createElement("div");
   body.className = "box-body";
-  const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
-  const isRenderedWindow = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
 
-  if (!isRenderedWindow) {
-    for (const { box: child } of box.children) {
-      body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+  if (isPointer && !pointerTarget) {
+    const msg = document.createElement("div");
+    msg.className = "box-pointer-missing";
+    msg.textContent = "⚠ reference not found";
+    body.appendChild(msg);
+  } else {
+    const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
+    const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
+
+    if (!isRenderedWindow) {
+      for (const { box: child } of effectiveBox.children) {
+        body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+      }
     }
-  }
-  if (box.text) {
-    const layer = isRenderedWindow ? buildRenderLayer(box) : buildTextLayer(box);
-    if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
-    body.insertBefore(layer, body.firstChild);
+    if (effectiveBox.text) {
+      const layer = isRenderedWindow ? buildRenderLayer(effectiveBox) : buildTextLayer(effectiveBox);
+      if (!isRenderedWindow) layer.dataset.worldTextLayer = "1";
+      body.insertBefore(layer, body.firstChild);
+    }
   }
   body.style.touchAction = "none";
   makeLassoGesture(body, box, true);
 
-  textBtn.onclick = () => {
+  if (textBtn) textBtn.onclick = () => {
     const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
     if (existing) { existing.focus(); return; }
     body.innerHTML = "";
