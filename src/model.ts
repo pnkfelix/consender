@@ -72,19 +72,37 @@ export type Guard =
 
 export type StackEntry = { op: Op; guard?: Guard };
 
-export interface Box {
+export interface RegularBox {
   id: string;
   display: DisplayMode;
   children: NamedChild[];
-  parent: Box | null;
+  parent: RegularBox | null;
   x: number;
   y: number;
   w: number;
   h: number;
   text: string;
-  pointerToId?: string;
   undoStack: StackEntry[];
   redoStack: StackEntry[];
+}
+
+export interface PointerBox {
+  id: string;
+  display: DisplayMode;
+  parent: RegularBox | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  pointerToId: string;
+  undoStack: StackEntry[];
+  redoStack: StackEntry[];
+}
+
+export type Box = RegularBox | PointerBox;
+
+export function isPointer(box: Box): box is PointerBox {
+  return "pointerToId" in box;
 }
 
 let nextId = 1;
@@ -107,7 +125,7 @@ export function getBoxTitle(box: Box): string {
   return nc?.title ?? "";
 }
 
-export function createBox(parent: Box | null): Box {
+export function createBox(parent: RegularBox | null): RegularBox {
   return {
     id: freshId(),
     display: "window",
@@ -123,11 +141,11 @@ export function createBox(parent: Box | null): Box {
   };
 }
 
-export function createRoot(): Box {
+export function createRoot(): RegularBox {
   return createBox(null);
 }
 
-export function wrapInParent(box: Box, childTitle: string): Box {
+export function wrapInParent(box: Box, childTitle: string): RegularBox {
   const parent = createBox(null);
   parent.children = [{ title: childTitle, box }];
   box.parent = parent;
@@ -137,7 +155,7 @@ export function wrapInParent(box: Box, childTitle: string): Box {
   return parent;
 }
 
-export function addChild(parent: Box, title: string): Box {
+export function addChild(parent: RegularBox, title: string): RegularBox {
   const child = createBox(parent);
   parent.children.push({ title, box: child });
   return child;

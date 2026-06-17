@@ -1,6 +1,6 @@
 import { applyOp, findBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
-import type { Box, Op } from "./model.js";
-import { getBoxTitle } from "./model.js";
+import type { Box, Op, RegularBox } from "./model.js";
+import { getBoxTitle, isPointer } from "./model.js";
 
 interface ScriptContext {
   root: Box;
@@ -34,9 +34,15 @@ const BUILTINS: Record<string, Word> = {
     if (!focusBox) return;
     // If the focused box is a pointer, insert into the target so the result is
     // visible (the UI renders the target's children, not the pointer's own).
-    const destId = focusBox.pointerToId ?? ctx.focusedBoxId;
-    const destBox = focusBox.pointerToId ? findBox(ctx.root, focusBox.pointerToId) : focusBox;
+    const destBox: RegularBox | null = (() => {
+      if (isPointer(focusBox)) {
+        const target = findBox(ctx.root, focusBox.pointerToId);
+        return target && !isPointer(target) ? target : null;
+      }
+      return focusBox;
+    })();
     if (!destBox) return;
+    const destId = destBox.id;
     let insertIdx = destBox.children.length;
     const newIds: string[] = [];
     for (const id of ctx.selectedBoxIds) {
