@@ -814,14 +814,14 @@ function buildWindow(box: Box): HTMLElement {
   // regularBox is non-null only when box is a RegularBox; captured in closures below.
   const regularBox = isPointer(box) ? null : box;
   let textBtn: HTMLButtonElement | null = null;
-  if (regularBox) {
+  if (effectiveBox) {
     textBtn = document.createElement("button");
     textBtn.title = "edit text";
     textBtn.textContent = "T";
-    if (regularBox.text) textBtn.classList.add("box-btn-has-text");
+    if (effectiveBox.text) textBtn.classList.add("box-btn-has-text");
     ribbon.appendChild(textBtn);
 
-    if (isRawModeW) {
+    if (isRawModeW && regularBox) {
       const collapseBtn = document.createElement("button");
       collapseBtn.title = "collapse into parent";
       collapseBtn.textContent = "⤵";
@@ -879,24 +879,26 @@ function buildWindow(box: Box): HTMLElement {
   body.style.touchAction = "none";
   if (effectiveBox) makeLassoGesture(body, effectiveBox, true);
 
-  if (textBtn && regularBox) textBtn.onclick = () => {
+  if (textBtn && effectiveBox) {
+  const textTarget = effectiveBox;
+  textBtn.onclick = () => {
     const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
     if (existing) { existing.focus(); return; }
     body.innerHTML = "";
 
     const ta = document.createElement("textarea");
     ta.className = "box-text-editor";
-    ta.value = regularBox.text;
+    ta.value = textTarget.text;
     ta.placeholder = "Enter text…";
 
-    const prevText = regularBox.text;
+    const prevText = textTarget.text;
     let done = false;
 
     const commit = () => {
       if (done) return;
       done = true;
       if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(regularBox, ta.value));
+        const result = recordOn(root, worldId, mkSetBoxText(textTarget, ta.value));
         root = result.root;
         worldId = result.worldId;
       }
@@ -912,6 +914,7 @@ function buildWindow(box: Box): HTMLElement {
     body.appendChild(ta);
     ta.focus();
   };
+  }
 
   el.appendChild(body);
 
