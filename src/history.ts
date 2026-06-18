@@ -3,9 +3,10 @@ import {
   freshId,
   getBoxTitle,
   getNextId,
+  isPointer,
   setNextId,
 } from "./model.js";
-import type { Box, DisplayMode, Guard, NamedChild, Op, OpSubtree, PositionRecord, SerializedBox, StackEntry } from "./model.js";
+import type { Box, DisplayMode, Guard, NamedChild, Op, OpSubtree, PositionRecord, RegularBox, SerializedBox, StackEntry } from "./model.js";
 
 export type { Guard, Op, OpSubtree, SerializedBox, StackEntry };
 
@@ -48,6 +49,7 @@ interface PersistedState {
 
 export function findBox(root: Box, id: string): Box | null {
   if (root.id === id) return root;
+  if (isPointer(root)) return null;
   for (const { box: child } of root.children) {
     const found = findBox(child, id);
     if (found) return found;
@@ -56,20 +58,33 @@ export function findBox(root: Box, id: string): Box | null {
 }
 
 function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
-  acc[box.id] = {
-    id: box.id,
-    display: box.display,
-    children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
-    parentId: box.parent ? box.parent.id : null,
-    x: box.x,
-    y: box.y,
-    w: box.w,
-    h: box.h,
-    text: box.text || undefined,
-    pointerToId: box.pointerToId,
-  };
-  for (const { box: child } of box.children) {
-    collectSubtree(child, acc);
+  if (isPointer(box)) {
+    acc[box.id] = {
+      id: box.id,
+      display: box.display,
+      children: [],
+      parentId: box.parent ? box.parent.id : null,
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+      pointerToId: box.pointerToId,
+    };
+  } else {
+    acc[box.id] = {
+      id: box.id,
+      display: box.display,
+      children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
+      parentId: box.parent ? box.parent.id : null,
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+      text: box.text || undefined,
+    };
+    for (const { box: child } of box.children) {
+      collectSubtree(child, acc);
+    }
   }
 }
 
@@ -102,26 +117,42 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(subtree.boxes)) {
     const s = subtree.boxes[id];
-    live[id] = {
-      id: s.id,
-      display: s.display,
-      children: [],
-      parent: null,
-      x: s.x,
-      y: s.y,
-      w: s.w,
-      h: s.h,
-      text: s.text ?? "",
-      pointerToId: s.pointerToId,
-      undoStack: [],
-      redoStack: [],
-    };
+    if (s.pointerToId) {
+      live[id] = {
+        id: s.id,
+        display: s.display,
+        parent: null,
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        pointerToId: s.pointerToId,
+        undoStack: [],
+        redoStack: [],
+      };
+    } else {
+      live[id] = {
+        id: s.id,
+        display: s.display,
+        children: [],
+        parent: null,
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        text: s.text ?? "",
+        undoStack: [],
+        redoStack: [],
+      };
+    }
   }
   for (const id of Object.keys(subtree.boxes)) {
     const s = subtree.boxes[id];
     const box = live[id];
-    box.children = deserializeChildren(s, subtree.boxes, live);
-    box.parent = s.parentId ? live[s.parentId] : null;
+    if (!isPointer(box)) {
+      box.children = deserializeChildren(s, subtree.boxes, live);
+    }
+    box.parent = s.parentId ? live[s.parentId] as RegularBox : null;
   }
   return live[subtree.rootId];
 }
@@ -130,22 +161,37 @@ function collectPersistedSubtree(
   box: Box,
   acc: Record<string, PersistedSerializedBox>
 ): void {
-  acc[box.id] = {
-    id: box.id,
-    display: box.display,
-    children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
-    parentId: box.parent ? box.parent.id : null,
-    x: box.x,
-    y: box.y,
-    w: box.w,
-    h: box.h,
-    text: box.text || undefined,
-    pointerToId: box.pointerToId,
-    undoStack: box.undoStack,
-    redoStack: box.redoStack,
-  };
-  for (const { box: child } of box.children) {
-    collectPersistedSubtree(child, acc);
+  if (isPointer(box)) {
+    acc[box.id] = {
+      id: box.id,
+      display: box.display,
+      children: [],
+      parentId: box.parent ? box.parent.id : null,
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+      pointerToId: box.pointerToId,
+      undoStack: box.undoStack,
+      redoStack: box.redoStack,
+    };
+  } else {
+    acc[box.id] = {
+      id: box.id,
+      display: box.display,
+      children: box.children.map(({ title, box: c }) => ({ id: c.id, title })),
+      parentId: box.parent ? box.parent.id : null,
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+      text: box.text || undefined,
+      undoStack: box.undoStack,
+      redoStack: box.redoStack,
+    };
+    for (const { box: child } of box.children) {
+      collectPersistedSubtree(child, acc);
+    }
   }
 }
 
@@ -181,26 +227,42 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
   const live: Record<string, Box> = {};
   for (const id of Object.keys(data.boxes)) {
     const s = data.boxes[id];
-    live[id] = {
-      id: s.id,
-      display: s.display,
-      children: [],
-      parent: null,
-      x: s.x,
-      y: s.y,
-      w: s.w,
-      h: s.h,
-      text: s.text ?? "",
-      pointerToId: s.pointerToId,
-      undoStack: migrateStackEntries(s.undoStack ?? []),
-      redoStack: migrateStackEntries(s.redoStack ?? []),
-    };
+    if (s.pointerToId) {
+      live[id] = {
+        id: s.id,
+        display: s.display,
+        parent: null,
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        pointerToId: s.pointerToId,
+        undoStack: migrateStackEntries(s.undoStack ?? []),
+        redoStack: migrateStackEntries(s.redoStack ?? []),
+      };
+    } else {
+      live[id] = {
+        id: s.id,
+        display: s.display,
+        children: [],
+        parent: null,
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        text: s.text ?? "",
+        undoStack: migrateStackEntries(s.undoStack ?? []),
+        redoStack: migrateStackEntries(s.redoStack ?? []),
+      };
+    }
   }
   for (const id of Object.keys(data.boxes)) {
     const s = data.boxes[id];
     const box = live[id];
-    box.children = deserializeChildren(s, data.boxes, live);
-    box.parent = s.parentId ? live[s.parentId] : null;
+    if (!isPointer(box)) {
+      box.children = deserializeChildren(s, data.boxes, live);
+    }
+    box.parent = s.parentId ? live[s.parentId] as RegularBox : null;
   }
   return live[data.rootId];
 }
@@ -264,7 +326,7 @@ export function applyOp(
     }
     case "SetBoxText": {
       const box = findBox(root, op.id);
-      if (box) { box.text = op.text; }
+      if (box && !isPointer(box)) { box.text = op.text; }
       return { root, worldId };
     }
     case "SetDisplay": {
@@ -274,7 +336,7 @@ export function applyOp(
     }
     case "AddBox": {
       const parent = findBox(root, op.parentId);
-      if (!parent) return { root, worldId };
+      if (!parent || isPointer(parent)) return { root, worldId };
       const newBox = deserializeOpSubtree(op.subtree);
       newBox.parent = parent;
       parent.children.splice(op.index, 0, { title: op.title, box: newBox });
@@ -282,7 +344,7 @@ export function applyOp(
     }
     case "RemoveBox": {
       const parent = findBox(root, op.parentId);
-      if (!parent) return { root, worldId };
+      if (!parent || isPointer(parent)) return { root, worldId };
       const nc = parent.children[op.index];
       if (!nc) return { root, worldId };
       parent.children.splice(op.index, 1);
@@ -296,9 +358,9 @@ export function applyOp(
     case "WrapInParent": {
       const child = findBox(root, op.childId);
       if (!child) return { root, worldId };
-      const wrapper: Box = {
+      const wrapper: RegularBox = {
         id: op.wrapperId,
-        display: "window" as DisplayMode,
+        display: "window",
         children: [{ title: op.childTitle, box: child }],
         parent: null,
         x: 0,
@@ -306,8 +368,8 @@ export function applyOp(
         w: 180,
         h: 130,
         text: "",
-        undoStack: [] as StackEntry[],
-        redoStack: [] as StackEntry[],
+        undoStack: [],
+        redoStack: [],
       };
       child.parent = wrapper;
       child.display = "window";
@@ -334,11 +396,11 @@ export function applyOp(
     }
     case "GroupBoxes": {
       const world = findBox(root, op.worldId);
-      if (!world) return { root, worldId };
+      if (!world || isPointer(world)) return { root, worldId };
       const childNcMap = new Map(world.children.map(nc => [nc.box.id, nc]));
       const toGroup = op.childIds.map(id => childNcMap.get(id)).filter((nc): nc is NamedChild => nc !== undefined);
       if (toGroup.length !== op.childIds.length) return { root, worldId };
-      const group: Box = {
+      const group: RegularBox = {
         id: op.groupId,
         display: "window",
         children: [],
@@ -369,11 +431,12 @@ export function applyOp(
     }
     case "UngroupBoxes": {
       const world = findBox(root, op.worldId);
-      if (!world) return { root, worldId };
+      if (!world || isPointer(world)) return { root, worldId };
       const groupIdx = world.children.findIndex(c => c.box.id === op.groupId);
       if (groupIdx === -1) return { root, worldId };
       const [groupNc] = world.children.splice(groupIdx, 1);
       const group = groupNc.box;
+      if (isPointer(group)) return { root, worldId };
       const restorations = op.childIds
         .map((id, i) => ({
           id,
@@ -400,7 +463,7 @@ export function applyOp(
     case "CollapseBox": {
       const parent = findBox(root, op.parentId);
       const box = findBox(root, op.boxId);
-      if (!parent || !box) return { root, worldId };
+      if (!parent || isPointer(parent) || !box || isPointer(box)) return { root, worldId };
       parent.children.splice(op.boxIndex, 1);
       for (let i = 0; i < op.childIds.length; i++) {
         const nc = box.children.find(c => c.box.id === op.childIds[i]);
@@ -426,13 +489,13 @@ export function applyOp(
     }
     case "UncollapseBox": {
       const parent = findBox(root, op.parentId);
-      if (!parent) return { root, worldId };
+      if (!parent || isPointer(parent)) return { root, worldId };
       const childrenToMove = op.childIds
         .map(id => parent.children.find(c => c.box.id === id))
         .filter((nc): nc is NamedChild => nc !== undefined);
       parent.children = parent.children.filter(c => !op.childIds.includes(c.box.id));
       const sBox = op.subtree.boxes[op.boxId];
-      const box: Box = {
+      const box: RegularBox = {
         id: sBox.id,
         display: sBox.display,
         children: [],
@@ -491,7 +554,7 @@ function evaluateGuard(guard: Guard, root: Box): boolean {
   switch (guard.kind) {
     case "wrapperIsClean": {
       const wrapper = findBox(root, guard.wrapperId);
-      if (!wrapper) return true;
+      if (!wrapper || isPointer(wrapper)) return true;
       return (
         wrapper.children.length === 1 &&
         wrapper.children[0].box.id === guard.childId &&
@@ -667,7 +730,7 @@ function findClearSpot(
 }
 
 function freshBoxPosition(
-  parent: Box,
+  parent: RegularBox,
   pw: number,
   ph: number,
   extraSiblings: Array<{ x: number; y: number; w: number; h: number; display: DisplayMode }> = []
@@ -691,7 +754,7 @@ function freshBoxPosition(
   return { x: 20 + Math.random() * 80, y: 20 + Math.random() * 60 };
 }
 
-export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
+export function mkAddBox(parent: RegularBox, parentW?: number, parentH?: number): Op {
   const id = freshId();
   const pw = parentW ?? parent.w;
   const ph = parentH ?? Math.max(0, parent.h - BAR_H);
@@ -720,7 +783,7 @@ export function mkAddBox(parent: Box, parentW?: number, parentH?: number): Op {
 }
 
 export function mkAddPointer(
-  parent: Box,
+  parent: RegularBox,
   targetId: string,
   title: string,
   index: number
@@ -761,7 +824,7 @@ export function mkRemoveBox(box: Box): Op {
   };
 }
 
-export function mkCollapseBox(box: Box): Op {
+export function mkCollapseBox(box: RegularBox): Op {
   if (!box.parent) throw new Error("Cannot collapse root box");
   const parent = box.parent;
   const boxIndex = parent.children.findIndex(c => c.box === box);
@@ -802,14 +865,14 @@ export function mkWrapInParent(box: Box): Op {
   };
 }
 
-export function mkSetBoxText(box: Box, newText: string): Op {
+export function mkSetBoxText(box: RegularBox, newText: string): Op {
   return { kind: "SetBoxText", id: box.id, text: newText, prevText: box.text };
 }
 
 // BAR_H must match .box-window-bar min-height in CSS
 const BAR_H = 44;
 
-export function mkGroupBoxes(world: Box, toGroup: Box[], groupText = "", worldNewText = world.text, fallbackCenter?: { x: number; y: number }): Op {
+export function mkGroupBoxes(world: RegularBox, toGroup: Box[], groupText = "", worldNewText = world.text, fallbackCenter?: { x: number; y: number }): Op {
   const PADDING = 20;
   let groupX: number, groupY: number, groupW: number, groupH: number;
 

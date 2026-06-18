@@ -1,7 +1,7 @@
 import { marked } from "marked";
 import { runScript } from "./script.js";
-import type { Box } from "./model.js";
-import { getBoxTitle } from "./model.js";
+import type { Box, RegularBox } from "./model.js";
+import { getBoxTitle, isPointer } from "./model.js";
 import {
   canUndo,
   findBox,
@@ -86,6 +86,7 @@ function footprintsOverlap(
 // A box occludes a sibling when it overlaps another child painted behind it
 // (earlier in its parent's child order, since later children paint on top).
 function collectOccluders(box: Box, out: Set<string>): void {
+  if (isPointer(box)) return;
   const kids = box.children;
   for (let i = 0; i < kids.length; i++) {
     const fi = boxFootprint(kids[i].box);
@@ -127,11 +128,13 @@ const helpMap: Record<string, string> = {
 function resolveToolbarPolicy(box: Box): ToolbarPolicy {
   let cur: Box | null = box;
   while (cur !== null) {
-    const cfg = cur.children.find(c => c.title === "toolbarPolicy");
-    if (cfg) {
-      const t = cfg.box.text.trim().toLowerCase();
-      if (t === "focus") return "focus";
-      if (t === "always") return "always";
+    if (!isPointer(cur)) {
+      const cfg = cur.children.find(c => c.title === "toolbarPolicy");
+      if (cfg && !isPointer(cfg.box)) {
+        const t = cfg.box.text.trim().toLowerCase();
+        if (t === "focus") return "focus";
+        if (t === "always") return "always";
+      }
     }
     cur = cur.parent;
   }
@@ -192,8 +195,9 @@ const rawViewBoxIds = new Set<string>();
 const KNOWN_RENDER_MODES = new Set(["svg", "markdown"]);
 
 function getBoxRenderMode(box: Box): string {
+  if (isPointer(box)) return "text";
   const renderChild = box.children.find(c => c.title.trim().toLowerCase() === "render");
-  if (!renderChild) return "text";
+  if (!renderChild || isPointer(renderChild.box)) return "text";
   const mode = renderChild.box.text.trim().toLowerCase();
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
@@ -202,30 +206,31 @@ function getBoxRenderMode(box: Box): string {
 // or null if it has no such child. The "script" child is a structural tag only — its own
 // text is irrelevant; the command list lives in the parent's text field.
 function getBoxScript(box: Box): string | null {
+  if (isPointer(box)) return null;
   if (!box.children.some(c => c.title === "script")) return null;
   return box.text.trim();
 }
 
-function buildSvgLayer(box: Box): HTMLElement {
+function buildSvgLayer(box: RegularBox): HTMLElement {
   const layer = document.createElement("div");
   layer.className = "box-svg-layer";
   layer.innerHTML = box.text;
   return layer;
 }
 
-function buildMarkdownLayer(box: Box): HTMLElement {
+function buildMarkdownLayer(box: RegularBox): HTMLElement {
   const layer = document.createElement("div");
   layer.className = "box-markdown-layer";
   layer.innerHTML = marked.parse(box.text) as string;
   return layer;
 }
 
-function buildRenderLayer(box: Box): HTMLElement {
+function buildRenderLayer(box: RegularBox): HTMLElement {
   const mode = getBoxRenderMode(box);
   return mode === "markdown" ? buildMarkdownLayer(box) : buildSvgLayer(box);
 }
 
-function buildRenderToggleBtn(box: Box, rawToggleId = box.id): HTMLButtonElement | null {
+function buildRenderToggleBtn(box: RegularBox, rawToggleId = box.id): HTMLButtonElement | null {
   const mode = getBoxRenderMode(box);
   if (mode === "text") return null;
   const isRaw = rawViewBoxIds.has(rawToggleId);
@@ -279,7 +284,7 @@ export function mount(app: HTMLElement): void {
 
 function render(): void {
   const world = findBox(root, worldId);
-  if (!world) return;
+  if (!world || isPointer(world)) return;
   occludingBoxIds = new Set();
   collectOccluders(world, occludingBoxIds);
   recomputeFocusParent();
@@ -288,7 +293,7 @@ function render(): void {
   updateHelpBar();
 }
 
-function buildWorld(box: Box): HTMLElement {
+function buildWorld(box: RegularBox): HTMLElement {
   const el = document.createElement("div");
   el.className = "box-fullscreen";
 
@@ -481,6 +486,7 @@ function buildCrumb(box: Box): HTMLElement {
 // Returns the single-word text value for icon display, or null if not applicable.
 // Only applies when box has no children and its text is exactly one non-whitespace word.
 function iconValueWord(box: Box): string | null {
+  if (isPointer(box)) return null;
   const trimmed = box.text.trim();
   if (trimmed.length === 0 || /\s/.test(trimmed) || box.children.length > 0) return null;
   return trimmed;
@@ -597,7 +603,7 @@ function freeSpans(
 // Builds the text overlay layer for a box that has text content.
 // Child boxes keep their absolute positions; text fills the gaps.
 // bodyW/bodyH default to the box's own stored size; pass larger values for fullscreen.
-function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): HTMLElement {
+function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): HTMLElement {
   const layer = document.createElement("div");
   layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
 
@@ -651,12 +657,20 @@ function buildTextLayer(box: Box, bodyW = box.w, bodyH = box.h - WINDOW_BAR_H): 
 }
 
 function buildWindow(box: Box): HTMLElement {
-  const isPointer = !!box.pointerToId;
-  const pointerTarget = isPointer ? findBox(root, box.pointerToId!) : null;
-  const effectiveBox = pointerTarget ?? box;
+  // Resolve effective content source: for a pointer box it's the target; for a
+  // regular box it's itself. null means the pointer target wasn't found.
+  let effectiveBox: RegularBox | null;
+  let pointerTarget: RegularBox | null = null;
+  if (isPointer(box)) {
+    const found = findBox(root, box.pointerToId);
+    pointerTarget = (found && !isPointer(found)) ? found : null;
+    effectiveBox = pointerTarget;
+  } else {
+    effectiveBox = box;
+  }
 
   const el = document.createElement("div");
-  el.className = isPointer ? "box-window box-pointer" : "box-window";
+  el.className = isPointer(box) ? "box-window box-pointer" : "box-window";
   el.dataset.boxId = box.id;
   const policy = resolveToolbarPolicy(box);
   el.dataset.toolbarPolicy = policy;
@@ -688,7 +702,7 @@ function buildWindow(box: Box): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
 
-  if (isPointer) {
+  if (isPointer(box)) {
     const glyph = document.createElement("span");
     glyph.className = "box-pointer-glyph";
     glyph.textContent = "→";
@@ -703,7 +717,8 @@ function buildWindow(box: Box): HTMLElement {
   const ribbon = document.createElement("div");
   ribbon.className = "box-ribbon";
 
-  const windowScript = !isPointer ? getBoxScript(effectiveBox) : null;
+  // For non-pointer boxes, expose the script run button if tagged.
+  const windowScript = !isPointer(box) && effectiveBox ? getBoxScript(effectiveBox) : null;
   if (windowScript !== null) {
     const runBtn = document.createElement("button");
     runBtn.title = "run script";
@@ -745,7 +760,7 @@ function buildWindow(box: Box): HTMLElement {
   ribbon.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
-  if (isPointer && pointerTarget) {
+  if (isPointer(box) && pointerTarget) {
     fullBtn.title = "go to referenced box";
     fullBtn.textContent = "⤢";
     fullBtn.onclick = () => {
@@ -765,7 +780,7 @@ function buildWindow(box: Box): HTMLElement {
   }
   ribbon.appendChild(fullBtn);
 
-  const isRawModeW = getBoxRenderMode(effectiveBox) === "text" || rawViewBoxIds.has(box.id);
+  const isRawModeW = !effectiveBox || getBoxRenderMode(effectiveBox) === "text" || rawViewBoxIds.has(box.id);
 
   if (isRawModeW) {
     const undoBtn = document.createElement("button");
@@ -793,15 +808,17 @@ function buildWindow(box: Box): HTMLElement {
     ribbon.appendChild(redoBtn);
   }
 
-  const renderToggleW = buildRenderToggleBtn(effectiveBox, box.id);
+  const renderToggleW = effectiveBox ? buildRenderToggleBtn(effectiveBox, box.id) : null;
   if (renderToggleW) ribbon.appendChild(renderToggleW);
 
+  // regularBox is non-null only when box is a RegularBox; captured in closures below.
+  const regularBox = isPointer(box) ? null : box;
   let textBtn: HTMLButtonElement | null = null;
-  if (!isPointer) {
+  if (regularBox) {
     textBtn = document.createElement("button");
     textBtn.title = "edit text";
     textBtn.textContent = "T";
-    if (box.text) textBtn.classList.add("box-btn-has-text");
+    if (regularBox.text) textBtn.classList.add("box-btn-has-text");
     ribbon.appendChild(textBtn);
 
     if (isRawModeW) {
@@ -809,8 +826,8 @@ function buildWindow(box: Box): HTMLElement {
       collapseBtn.title = "collapse into parent";
       collapseBtn.textContent = "⤵";
       collapseBtn.onclick = () => {
-        if (!box.parent) return;
-        const op = mkCollapseBox(box);
+        if (!regularBox.parent) return;
+        const op = mkCollapseBox(regularBox);
         const result = recordOn(root, worldId, op);
         root = result.root;
         worldId = result.worldId;
@@ -821,7 +838,7 @@ function buildWindow(box: Box): HTMLElement {
   }
 
   const delBtn = document.createElement("button");
-  delBtn.title = isPointer ? "unlink" : "delete";
+  delBtn.title = isPointer(box) ? "unlink" : "delete";
   delBtn.textContent = "✕";
   delBtn.onclick = () => {
     if (!box.parent) return;
@@ -839,12 +856,12 @@ function buildWindow(box: Box): HTMLElement {
   const body = document.createElement("div");
   body.className = "box-body";
 
-  if (isPointer && !pointerTarget) {
+  if (isPointer(box) && !pointerTarget) {
     const msg = document.createElement("div");
     msg.className = "box-pointer-missing";
     msg.textContent = "⚠ reference not found";
     body.appendChild(msg);
-  } else {
+  } else if (effectiveBox) {
     const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
     const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
 
@@ -860,26 +877,26 @@ function buildWindow(box: Box): HTMLElement {
     }
   }
   body.style.touchAction = "none";
-  makeLassoGesture(body, box, true);
+  if (effectiveBox) makeLassoGesture(body, effectiveBox, true);
 
-  if (textBtn) textBtn.onclick = () => {
+  if (textBtn && regularBox) textBtn.onclick = () => {
     const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
     if (existing) { existing.focus(); return; }
     body.innerHTML = "";
 
     const ta = document.createElement("textarea");
     ta.className = "box-text-editor";
-    ta.value = box.text;
+    ta.value = regularBox.text;
     ta.placeholder = "Enter text…";
 
-    const prevText = box.text;
+    const prevText = regularBox.text;
     let done = false;
 
     const commit = () => {
       if (done) return;
       done = true;
       if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
+        const result = recordOn(root, worldId, mkSetBoxText(regularBox, ta.value));
         root = result.root;
         worldId = result.worldId;
       }
@@ -1056,7 +1073,7 @@ function computeTextMigration(
 
 type Pt = { x: number; y: number };
 
-function makeLassoGesture(content: HTMLElement, world: Box, constrainToContent = false): void {
+function makeLassoGesture(content: HTMLElement, world: RegularBox, constrainToContent = false): void {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.style.cssText =
     "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden;z-index:1000;";
@@ -1182,7 +1199,7 @@ function isClosedLasso(points: Pt[]): boolean {
   return Math.sqrt(dx * dx + dy * dy) < 60;
 }
 
-function findEncircledBoxes(world: Box, polygon: Pt[], boundsFilter?: { w: number; h: number }): Box[] {
+function findEncircledBoxes(world: RegularBox, polygon: Pt[], boundsFilter?: { w: number; h: number }): Box[] {
   return world.children
     .filter(({ box: child }) => {
       const cx = child.x + (child.display === "window" ? child.w / 2 : 60);
@@ -1205,7 +1222,7 @@ function pointInPolygon(x: number, y: number, polygon: Pt[]): boolean {
   return inside;
 }
 
-function computePreviewRect(world: Box, points: Pt[], boundsFilter?: { w: number; h: number }): { x: number; y: number; w: number; h: number } {
+function computePreviewRect(world: RegularBox, points: Pt[], boundsFilter?: { w: number; h: number }): { x: number; y: number; w: number; h: number } {
   const encircled = findEncircledBoxes(world, points, boundsFilter);
   const PADDING = 20;
   if (encircled.length > 0) {
@@ -1229,7 +1246,7 @@ function computePreviewRect(world: Box, points: Pt[], boundsFilter?: { w: number
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
-function updateGhostBox(ghostEl: SVGRectElement, world: Box, points: Pt[], cancelled: boolean, boundsFilter?: { w: number; h: number }): void {
+function updateGhostBox(ghostEl: SVGRectElement, world: RegularBox, points: Pt[], cancelled: boolean, boundsFilter?: { w: number; h: number }): void {
   if (!cancelled && isClosedLasso(points)) {
     const r = computePreviewRect(world, points, boundsFilter);
     ghostEl.setAttribute("x", String(r.x));

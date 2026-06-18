@@ -1,6 +1,6 @@
 import { applyOp, findBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
-import type { Box, Op } from "./model.js";
-import { getBoxTitle } from "./model.js";
+import type { Box, Op, RegularBox } from "./model.js";
+import { getBoxTitle, isPointer } from "./model.js";
 
 interface ScriptContext {
   root: Box;
@@ -32,13 +32,26 @@ const BUILTINS: Record<string, Word> = {
     if (!ctx.focusedBoxId) return;
     const focusBox = findBox(ctx.root, ctx.focusedBoxId);
     if (!focusBox) return;
-    let insertIdx = focusBox.children.length;
+    // If the focused box is a pointer, insert into the target so the result is
+    // visible (the UI renders the target's children, not the pointer's own).
+    const destBox: RegularBox | null = (() => {
+      if (isPointer(focusBox)) {
+        const target = findBox(ctx.root, focusBox.pointerToId);
+        return target && !isPointer(target) ? target : null;
+      }
+      return focusBox;
+    })();
+    if (!destBox) return;
+    const destId = destBox.id;
+    let insertIdx = destBox.children.length;
     const newIds: string[] = [];
     for (const id of ctx.selectedBoxIds) {
-      if (id === ctx.focusedBoxId) continue;
-      const target = findBox(ctx.root, id);
-      if (!target) continue;
-      const op = mkAddPointer(focusBox, id, getBoxTitle(target), insertIdx++);
+      // If selected box is a pointer, use its target — chains have length 1
+      // by invariant (pointers always reference RegularBoxes).
+      const found = findBox(ctx.root, id);
+      const resolved = found && isPointer(found) ? findBox(ctx.root, found.pointerToId) : found;
+      if (!resolved || resolved.id === destId) continue;
+      const op = mkAddPointer(destBox, resolved.id, getBoxTitle(resolved), insertIdx++);
       if (op.kind === "AddBox") newIds.push(op.subtree.rootId);
       ctx.pendingOps.push(op);
     }
