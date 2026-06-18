@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Consender</title>
     <link rel="stylesheet" href="/src/styles.css" />
-  <script>if (new URLSearchParams(window.location.search).get('debug') === '1') { document.write('<script src="%BASE_URL%vconsole.min.js"><\/script>'); }</script>
+  <script>var _p = new URLSearchParams(window.location.search); if (_p.get('vconsole') === '1' || _p.get('debug') === '1') { document.write('<script src="%BASE_URL%vconsole.min.js"><\/script>'); }</script>
   <script>if (typeof VConsole !== 'undefined') { new VConsole(); console.log('vConsole active'); }</script>
   </head>
   <body>
