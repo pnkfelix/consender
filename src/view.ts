@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import { runScript } from "./script.js";
+import { parseColorWords, oklchToCss, type Oklch } from "./color.js";
 import type { Box, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
 import {
@@ -115,7 +116,16 @@ const helpMap: Record<string, string> = {
   "help": "consender: an infinite canvas of nested boxes. " +
     "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
     "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
-  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script.",
+  "backgroundColor": "Child-box property: sets the parent box's background fill, inherited by all " +
+    "descendants until one sets its own backgroundColor. Value: color words in the box's text " +
+    "(e.g. \"deep blue\", \"pale pink\", \"bluish green\"), or an \"oklch\" child box carrying L, C, H number boxes.",
+  "textColor": "Child-box property: sets the parent box's text color, inherited by all descendants " +
+    "until one sets its own textColor. Value: color words in the box's text (e.g. \"dark green\"), " +
+    "or an \"oklch\" child box carrying L, C, H number boxes.",
+  "oklch": "Color value: as a child of a backgroundColor/textColor box, carries L (0–1), C (0+), and " +
+    "H (0–360°) number boxes specifying a color directly in the OKLCH perceptual color space.",
+  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script, " +
+    "backgroundColor, textColor, oklch.",
   "builtinCommands": "Primitive script commands: " +
     "iconify — set selected boxes to icon display; " +
     "windowify — set selected boxes to window display; " +
@@ -209,6 +219,57 @@ function getBoxScript(box: Box): string | null {
   if (isPointer(box)) return null;
   if (!box.children.some(c => c.title === "script")) return null;
   return box.text.trim();
+}
+
+// Reads a single number from a child box named `name` (case-insensitive),
+// whose value is its trimmed text. Used for the L/C/H boxes of an `oklch` value.
+function readNumberChild(box: RegularBox, name: string): number | null {
+  const child = box.children.find(c => c.title.trim().toLowerCase() === name);
+  if (!child || isPointer(child.box)) return null;
+  const v = parseFloat(child.box.text.trim());
+  return Number.isFinite(v) ? v : null;
+}
+
+// Resolves the OKLCH value carried by a backgroundColor/textColor config box.
+// Two forms: a structural `oklch` child carrying L/C/H number boxes, or the
+// box's own text parsed as compositional color words.
+function readColorBoxValue(box: Box): Oklch | null {
+  if (isPointer(box)) return null;
+  const oklchChild = box.children.find(c => c.title.trim().toLowerCase() === "oklch");
+  if (oklchChild && !isPointer(oklchChild.box)) {
+    const L = readNumberChild(oklchChild.box, "l");
+    const C = readNumberChild(oklchChild.box, "c");
+    const H = readNumberChild(oklchChild.box, "h");
+    return L !== null && C !== null && H !== null ? { L, C, H } : null;
+  }
+  return parseColorWords(box.text);
+}
+
+// A color attribute (backgroundColor / textColor) is configured by a like-named
+// child box. It applies to that box and inherits down to all descendants; the
+// nearest setting walking up the tree wins, so a child's own setting overrides
+// an inherited one. Returns a CSS color string, or null if unset/unresolvable.
+function resolveColorAttr(box: Box, attr: string): string | null {
+  let cur: Box | null = box;
+  while (cur !== null) {
+    if (!isPointer(cur)) {
+      const cfg = cur.children.find(c => c.title.trim() === attr);
+      if (cfg) {
+        const val = readColorBoxValue(cfg.box);
+        if (val) return oklchToCss(val);
+      }
+    }
+    cur = cur.parent;
+  }
+  return null;
+}
+
+// Applies a box's resolved background/text colors to its rendered surfaces.
+function applyBoxColors(box: Box, bgEl: HTMLElement, fgEl: HTMLElement): void {
+  const bg = resolveColorAttr(box, "backgroundColor");
+  const fg = resolveColorAttr(box, "textColor");
+  if (bg) bgEl.style.background = bg;
+  if (fg) fgEl.style.color = fg;
 }
 
 function buildSvgLayer(box: RegularBox): HTMLElement {
@@ -389,6 +450,7 @@ function buildWorld(box: RegularBox): HTMLElement {
   const content = document.createElement("div");
   content.className = "box-content";
   content.style.touchAction = "none";
+  applyBoxColors(box, content, content);
 
   content.addEventListener("pointerdown", () => {
     if (focusedBoxId !== null) { focusedBoxId = null; updateFocusHighlight(); }
@@ -497,6 +559,8 @@ function buildIcon(box: Box): HTMLElement {
   el.className = "box-icon";
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
+
+  applyBoxColors(box, el, el);
 
   const label = document.createElement("span");
   label.className = "box-icon-label";
@@ -855,6 +919,7 @@ function buildWindow(box: Box): HTMLElement {
 
   const body = document.createElement("div");
   body.className = "box-body";
+  applyBoxColors(box, body, body);
 
   if (isPointer(box) && !pointerTarget) {
     const msg = document.createElement("div");
