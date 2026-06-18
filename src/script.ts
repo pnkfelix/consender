@@ -46,10 +46,13 @@ const BUILTINS: Record<string, Word> = {
     let insertIdx = destBox.children.length;
     const newIds: string[] = [];
     for (const id of ctx.selectedBoxIds) {
-      if (id === destId) continue;
-      const target = findBox(ctx.root, id);
-      if (!target) continue;
-      const op = mkAddPointer(destBox, id, getBoxTitle(target), insertIdx++);
+      // Dereference pointer chains so link always points to a RegularBox.
+      let resolved = findBox(ctx.root, id);
+      while (resolved && isPointer(resolved)) {
+        resolved = findBox(ctx.root, resolved.pointerToId);
+      }
+      if (!resolved || resolved.id === destId) continue;
+      const op = mkAddPointer(destBox, resolved.id, getBoxTitle(resolved), insertIdx++);
       if (op.kind === "AddBox") newIds.push(op.subtree.rootId);
       ctx.pendingOps.push(op);
     }
