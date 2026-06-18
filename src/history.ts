@@ -57,6 +57,62 @@ export function findBox(root: Box, id: string): Box | null {
   return null;
 }
 
+function getBoxPathString(box: Box): string {
+  const parts: string[] = [];
+  let b: Box | null = box;
+  while (b) { parts.unshift(getBoxTitle(b)); b = b.parent; }
+  return parts.join(" › ");
+}
+
+function findPathInSerializedSubtree(
+  subtree: OpSubtree,
+  currentId: string,
+  targetId: string,
+  pathSoFar: string
+): string | null {
+  if (currentId === targetId) return pathSoFar;
+  const s = subtree.boxes[currentId];
+  if (!s || s.pointerToId !== undefined) return null;
+  for (const { id: childId, title: childTitle } of s.children) {
+    const found = findPathInSerializedSubtree(subtree, childId, targetId, pathSoFar + " › " + childTitle);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function searchOpsForTarget(ops: readonly Op[], targetId: string): string | null {
+  for (const op of ops) {
+    if (op.kind === "RemoveBox") {
+      const found = findPathInSerializedSubtree(op.subtree, op.subtree.rootId, targetId, op.title);
+      if (found !== null) return found;
+    } else if (op.kind === "CollapseBox") {
+      const found = findPathInSerializedSubtree(op.subtree, op.subtree.rootId, targetId, op.boxTitle);
+      if (found !== null) return found;
+    } else if (op.kind === "BatchOp") {
+      const found = searchOpsForTarget(op.ops, targetId);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
+function searchTreeForTarget(box: Box, targetId: string): string | null {
+  if (isPointer(box)) return null;
+  const relPath = searchOpsForTarget(box.undoStack.map(e => e.op), targetId);
+  if (relPath !== null) return getBoxPathString(box) + " › " + relPath;
+  for (const { box: child } of box.children) {
+    const found = searchTreeForTarget(child, targetId);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+export function getPathForBoxId(root: Box, targetId: string): string | null {
+  const live = findBox(root, targetId);
+  if (live) return getBoxPathString(live);
+  return searchTreeForTarget(root, targetId);
+}
+
 function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
   if (isPointer(box)) {
     acc[box.id] = {

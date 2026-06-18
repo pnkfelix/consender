@@ -6,6 +6,7 @@ import { getBoxTitle, isPointer } from "./model.js";
 import {
   canUndo,
   findBox,
+  getPathForBoxId,
   loadOrInit,
   mkAddBox,
   mkCollapseBox,
@@ -926,6 +927,13 @@ function buildWindow(box: Box): HTMLElement {
     msg.className = "box-pointer-missing";
     msg.textContent = "⚠ reference not found";
     body.appendChild(msg);
+    const path = getPathForBoxId(root, box.pointerToId);
+    if (path) {
+      const pathEl = document.createElement("div");
+      pathEl.className = "box-pointer-missing-path";
+      pathEl.textContent = path;
+      body.appendChild(pathEl);
+    }
   } else if (effectiveBox) {
     const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
     const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);

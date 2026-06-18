@@ -377,6 +377,13 @@ html, body, #app {
   font-style: italic;
 }
 
+.box-pointer-missing-path {
+  padding: 0 8px 8px;
+  font-size: 11px;
+  opacity: 0.5;
+  font-family: monospace;
+}
+
 /* ---- selection and focus highlights ---- */
 
 /* Selection: pulsing outer glow. Compose with the box's occlusion drop shadow
