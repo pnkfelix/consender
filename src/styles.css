@@ -377,13 +377,6 @@ html, body, #app {
   font-style: italic;
 }
 
-.box-cycle {
-  padding: 8px;
-  font-size: 13px;
-  opacity: 0.5;
-  font-style: italic;
-}
-
 .box-pointer-missing-path {
   padding: 0 8px 8px;
   font-size: 11px;

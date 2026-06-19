@@ -46,11 +46,12 @@ let helpEl!: HTMLDivElement;
 // parent"; a box sitting only over its parent stays flat.
 let occludingBoxIds = new Set<string>();
 
-// Tracks which box ids are currently being rendered as effective content
-// sources in the buildWindow/buildWorld call stack. Lets us detect cycles
-// (A has a pointer to B; B has a pointer to A) and render a stub instead of
-// recursing infinitely.
-const renderingEffectiveIds = new Set<string>();
+// A rectangle in screen pixel coordinates. Passed through the render tree so
+// each buildWindow call knows where its parent's body sits on screen. Used for
+// viewport culling: we skip rendering a box's children when the box's body rect
+// falls entirely outside the screen, which naturally terminates pointer cycles
+// (each recursion adds at least WINDOW_BAR_H to the screen-Y).
+type ScreenRect = { x: number; y: number; w: number; h: number };
 
 // Approximate footprint of a box in its parent's coordinate space. Windows use
 // their stored geometry; icons are measured (see iconWidth) since their width
@@ -545,11 +546,15 @@ function buildWorld(box: RegularBox): HTMLElement {
 
   const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
   if (!isRenderedWorld) {
-    renderingEffectiveIds.add(box.id);
+    // Children in the world use the full viewport as their parent body rect.
+    // WINDOW_BAR_H approximates the world title bar height.
+    const worldBodyRect: ScreenRect = {
+      x: 0, y: WINDOW_BAR_H,
+      w: window.innerWidth, h: window.innerHeight - WINDOW_BAR_H,
+    };
     for (const { box: child } of box.children) {
-      content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
+      content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child, worldBodyRect));
     }
-    renderingEffectiveIds.delete(box.id);
   }
   makeLassoGesture(content, box);
   if (box.text) {
@@ -808,7 +813,7 @@ function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_B
   return layer;
 }
 
-function buildWindow(box: Box): HTMLElement {
+function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
   // Resolve effective content source: for a pointer box it's the target; for a
   // regular box it's itself. null means the pointer target wasn't found.
   let effectiveBox: RegularBox | null;
@@ -823,6 +828,19 @@ function buildWindow(box: Box): HTMLElement {
   } else {
     effectiveBox = box;
   }
+
+  // Screen rect of this box's body (below the title bar). Used to skip
+  // children that fall outside the viewport, which terminates pointer cycles.
+  const bodyRect: ScreenRect = {
+    x: parentBodyRect.x + box.x,
+    y: parentBodyRect.y + box.y + WINDOW_BAR_H,
+    w: box.w,
+    h: box.h - WINDOW_BAR_H,
+  };
+  const bodyVisible = (
+    bodyRect.x < window.innerWidth && bodyRect.x + bodyRect.w > 0 &&
+    bodyRect.y < window.innerHeight && bodyRect.y + bodyRect.h > 0
+  );
 
   const el = document.createElement("div");
   el.className = isPointer(box) ? "box-window box-pointer" : "box-window";
@@ -1027,18 +1045,9 @@ function buildWindow(box: Box): HTMLElement {
     const tooSmall = box.w < MIN_BODY_W || (box.h - WINDOW_BAR_H) < MIN_BODY_H;
     const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
 
-    if (!isRenderedWindow) {
-      if (renderingEffectiveIds.has(effectiveBox.id)) {
-        const cycleEl = document.createElement("div");
-        cycleEl.className = "box-cycle";
-        cycleEl.textContent = "↺";
-        body.appendChild(cycleEl);
-      } else {
-        renderingEffectiveIds.add(effectiveBox.id);
-        for (const { box: child } of effectiveBox.children) {
-          body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
-        }
-        renderingEffectiveIds.delete(effectiveBox.id);
+    if (!isRenderedWindow && bodyVisible) {
+      for (const { box: child } of effectiveBox.children) {
+        body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child, bodyRect));
       }
     }
     if (effectiveBox.text) {
