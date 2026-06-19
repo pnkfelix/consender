@@ -73,7 +73,12 @@ function findPathInSerializedSubtree(
   if (currentId === targetId) return pathSoFar;
   const s = subtree.boxes[currentId];
   if (!s || s.pointerToId !== undefined) return null;
-  for (const { id: childId, title: childTitle } of s.children) {
+  // Guard against old-format ops that used `childIds` instead of `children`.
+  const raw = s as any;
+  const children: Array<{ id: string; title: string }> = raw.childIds
+    ? (raw.childIds as string[]).map((cid: string) => ({ id: cid, title: (subtree.boxes[cid] as any)?.label ?? "" }))
+    : (s.children ?? []);
+  for (const { id: childId, title: childTitle } of children) {
     const found = findPathInSerializedSubtree(subtree, childId, targetId, pathSoFar + " › " + childTitle);
     if (found !== null) return found;
   }
