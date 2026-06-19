@@ -57,6 +57,13 @@ export function findBox(root: Box, id: string): Box | null {
   return null;
 }
 
+export function getBoxPathString(box: Box): string {
+  const parts: string[] = [];
+  let b: Box | null = box;
+  while (b) { parts.unshift(getBoxTitle(b)); b = b.parent; }
+  return parts.join(" › ");
+}
+
 function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
   if (isPointer(box)) {
     acc[box.id] = {
@@ -174,6 +181,7 @@ function collectPersistedSubtree(
       w: box.w,
       h: box.h,
       pointerToId: box.pointerToId,
+      pointerPath: box.pointerPath,
       undoStack: box.undoStack,
       redoStack: box.redoStack,
     };
@@ -239,6 +247,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
         w: s.w,
         h: s.h,
         pointerToId: s.pointerToId,
+        pointerPath: s.pointerPath,
         undoStack: migrateStackEntries(s.undoStack ?? []),
         redoStack: migrateStackEntries(s.redoStack ?? []),
       };

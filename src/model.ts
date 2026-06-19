@@ -65,6 +65,7 @@ export interface SerializedBox {
   h: number;
   text?: string;
   pointerToId?: string;
+  pointerPath?: string;
 }
 
 export type Guard =
@@ -95,6 +96,7 @@ export interface PointerBox {
   w: number;
   h: number;
   pointerToId: string;
+  pointerPath?: string;
   undoStack: StackEntry[];
   redoStack: StackEntry[];
 }
