@@ -165,7 +165,42 @@ function updateSelection(): void {
   document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
     el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
+  const zoomSelBtn = document.querySelector<HTMLButtonElement>(".zoom-sel-btn");
+  if (zoomSelBtn) zoomSelBtn.disabled = selectedBoxIds.size === 0;
   updateHelpBar();
+}
+
+// Returns the target box to zoom to for "zoom to selection": the LCA of all
+// selected boxes, stepping up one level when the LCA is itself selected.
+function findZoomToSelectionTarget(): Box | null {
+  if (selectedBoxIds.size === 0) return null;
+
+  function ancestorPath(box: Box): Box[] {
+    const path: Box[] = [];
+    let cur: Box | null = box;
+    while (cur) { path.unshift(cur); cur = cur.parent; }
+    return path;
+  }
+
+  const paths: Box[][] = [];
+  for (const id of selectedBoxIds) {
+    const box = findBox(root, id);
+    if (box) paths.push(ancestorPath(box));
+  }
+  if (paths.length === 0) return null;
+
+  let lca: Box = paths[0][0];
+  const minLen = Math.min(...paths.map(p => p.length));
+  for (let i = 0; i < minLen; i++) {
+    const id = paths[0][i].id;
+    if (paths.every(p => p[i].id === id)) lca = paths[0][i];
+    else break;
+  }
+
+  // If the LCA is itself a selected box (e.g. single selection, or one selected
+  // box is an ancestor of all others), navigate to its parent instead.
+  if (selectedBoxIds.has(lca.id)) return lca.parent ?? null;
+  return lca;
 }
 
 function recomputeFocusParent(): void {
@@ -389,6 +424,20 @@ function buildWorld(box: RegularBox): HTMLElement {
     }
   };
   bar.appendChild(outBtn);
+
+  const zoomSelBtn = document.createElement("button");
+  zoomSelBtn.textContent = "zoom sel";
+  zoomSelBtn.className = "zoom-sel-btn";
+  zoomSelBtn.title = "zoom to selection";
+  zoomSelBtn.disabled = selectedBoxIds.size === 0;
+  zoomSelBtn.onclick = () => {
+    const target = findZoomToSelectionTarget();
+    if (!target) return;
+    worldId = target.id;
+    persist(root, worldId);
+    render();
+  };
+  bar.appendChild(zoomSelBtn);
 
   const worldScript = getBoxScript(box);
   if (worldScript !== null) {
