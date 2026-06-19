@@ -89,6 +89,7 @@ const HUES: Record<string, number> = {
   purple: 320,
 };
 const SHARED_C = Math.min(...Object.values(HUES).map(h => maxChroma(BASE_L, h)));
+console.log("[consender] color.ts loaded, SHARED_C=", SHARED_C);
 
 type Modifier = (c: Oklch) => Oklch;
 

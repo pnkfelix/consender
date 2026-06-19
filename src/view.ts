@@ -309,6 +309,7 @@ function buildRenderToggleBtn(box: RegularBox, rawToggleId = box.id): HTMLButton
 }
 
 export function mount(app: HTMLElement): void {
+  console.log("[consender] mount called, app el:", app?.id);
   appEl = app;
 
   helpEl = document.createElement("div");
@@ -316,9 +317,16 @@ export function mount(app: HTMLElement): void {
   helpEl.style.display = "none";
   document.body.appendChild(helpEl);
 
-  const loaded = loadOrInit();
+  let loaded: { root: Box; worldId: string };
+  try {
+    loaded = loadOrInit();
+  } catch (err) {
+    console.error("[consender] loadOrInit threw:", err);
+    return;
+  }
   root = loaded.root;
   worldId = loaded.worldId;
+  console.log("[consender] loaded state: worldId=", worldId, "root.id=", root?.id, "root type=", root && ("pointerToId" in root ? "pointer" : "regular"));
   render();
 
   document.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -345,17 +353,26 @@ export function mount(app: HTMLElement): void {
 }
 
 function render(): void {
+  console.log("[consender] render: worldId=", worldId);
   const world = findBox(root, worldId);
-  if (!world || isPointer(world)) return;
+  if (!world || isPointer(world)) {
+    console.warn("[consender] render: world not found or is pointer, worldId=", worldId, "found=", world);
+    return;
+  }
   occludingBoxIds = new Set();
   collectOccluders(world, occludingBoxIds);
   recomputeFocusParent();
   appEl.innerHTML = "";
-  appEl.appendChild(buildWorld(world));
+  try {
+    appEl.appendChild(buildWorld(world));
+  } catch (err) {
+    console.error("[consender] buildWorld threw:", err);
+  }
   updateHelpBar();
 }
 
 function buildWorld(box: RegularBox): HTMLElement {
+  console.log("[consender] buildWorld: box.id=", box.id, "children=", !("pointerToId" in box) && box.children.length);
   const el = document.createElement("div");
   el.className = "box-fullscreen";
 
