@@ -183,6 +183,12 @@ function updateSelection(): void {
   });
   const zoomSelBtn = document.querySelector<HTMLButtonElement>(".zoom-sel-btn");
   if (zoomSelBtn) zoomSelBtn.disabled = selectedBoxIds.size === 0;
+  const selectModeBtn = document.querySelector<HTMLButtonElement>(".mode-btn-select");
+  if (selectModeBtn) {
+    selectModeBtn.textContent = selectedBoxIds.size > 0
+      ? `select (${selectedBoxIds.size})`
+      : "select";
+  }
   updateHelpBar();
 }
 
@@ -239,7 +245,10 @@ function buildModeSwitcher(): HTMLElement {
   el.className = "mode-switcher";
   for (const m of ["select", "act"] as Mode[]) {
     const btn = document.createElement("button");
-    btn.textContent = m;
+    btn.textContent = m === "select" && selectedBoxIds.size > 0
+      ? `select (${selectedBoxIds.size})`
+      : m;
+    if (m === "select") btn.classList.add("mode-btn-select");
     if (mode === m) btn.classList.add("mode-btn-active");
     btn.onclick = () => {
       if (mode === m) return;
