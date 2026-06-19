@@ -152,6 +152,18 @@ function resolveToolbarPolicy(box: Box): ToolbarPolicy {
 }
 
 function updateHelpBar(): void {
+  const focusedBox = focusedBoxId !== null ? findBox(root, focusedBoxId) : null;
+  if (focusedBox !== null && isPointer(focusedBox)) {
+    const target = findBox(root, focusedBox.pointerToId);
+    if (target !== null) {
+      const path: string[] = [];
+      let b: Box | null = target;
+      while (b) { path.unshift(getBoxTitle(b)); b = b.parent; }
+      helpEl.textContent = "link to " + path.join(" › ");
+      helpEl.style.display = "block";
+      return;
+    }
+  }
   const lastId = [...selectedBoxIds].at(-1);
   const selectedBox = lastId ? findBox(root, lastId) : null;
   const world = findBox(root, worldId);
@@ -215,6 +227,7 @@ function updateFocusHighlight(): void {
     el.classList.toggle("box-focused", id === focusedBoxId);
     el.classList.toggle("box-focus-parent", focusedParentBoxId !== null && id === focusedParentBoxId);
   });
+  updateHelpBar();
 }
 
 function buildModeSwitcher(): HTMLElement {
