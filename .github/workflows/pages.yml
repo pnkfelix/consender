@@ -97,7 +97,7 @@ jobs:
               echo '<p>No open PRs currently have the <code>preview</code> label.</p>'
             else
               echo '<ul>'
-              echo "$prs_json" | jq -r '.[] | "<li><a href=\"/consender/preview/pr-\(.number)/\"><span class=\"pr-num\">#\(.number)</span> \(.title | @html)</a></li>"'
+              echo "$prs_json" | jq -r '.[] | "<li><a href=\"/consender/preview/pr-\(.number)/\"><span class=\"pr-num\">#\(.number)</span> \(.title | @html)</a> <a href=\"/consender/preview/pr-\(.number)/?debug=1\">(debug)</a></li>"'
               echo '</ul>'
             fi
             printf '%s\n' '</body>' '</html>'

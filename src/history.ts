@@ -102,15 +102,17 @@ function deserializeChildren(
   const raw = s as any;
   if (raw.childIds) {
     // very old format: titles were on the child boxes themselves
-    return (raw.childIds as string[]).map((cid: string) => ({
-      title: (allBoxes[cid] as any)?.label ?? "",
-      box: live[cid],
-    }));
+    return (raw.childIds as string[])
+      .map((cid: string) => ({ title: (allBoxes[cid] as any)?.label ?? "", box: live[cid] }))
+      .filter((nc): nc is NamedChild => nc.box != null);
   }
-  return s.children.map(c => {
-    const rc = c as any;
-    return { title: rc.title ?? rc.name ?? "", box: live[c.id] };
-  });
+  if (!Array.isArray(s.children)) return [];
+  return s.children
+    .map(c => {
+      const rc = c as any;
+      return { title: rc.title ?? rc.name ?? "", box: live[c.id] };
+    })
+    .filter((nc): nc is NamedChild => nc.box != null);
 }
 
 export function deserializeOpSubtree(subtree: OpSubtree): Box {
