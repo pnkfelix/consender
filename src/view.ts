@@ -46,6 +46,12 @@ let helpEl!: HTMLDivElement;
 // parent"; a box sitting only over its parent stays flat.
 let occludingBoxIds = new Set<string>();
 
+// Tracks which box ids are currently being rendered as effective content
+// sources in the buildWindow/buildWorld call stack. Lets us detect cycles
+// (A has a pointer to B; B has a pointer to A) and render a stub instead of
+// recursing infinitely.
+const renderingEffectiveIds = new Set<string>();
+
 // Approximate footprint of a box in its parent's coordinate space. Windows use
 // their stored geometry; icons are measured (see iconWidth) since their width
 // depends on the title plus an optional inline ": value".
@@ -539,9 +545,11 @@ function buildWorld(box: RegularBox): HTMLElement {
 
   const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
   if (!isRenderedWorld) {
+    renderingEffectiveIds.add(box.id);
     for (const { box: child } of box.children) {
       content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child));
     }
+    renderingEffectiveIds.delete(box.id);
   }
   makeLassoGesture(content, box);
   if (box.text) {
@@ -1020,8 +1028,17 @@ function buildWindow(box: Box): HTMLElement {
     const isRenderedWindow = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
 
     if (!isRenderedWindow) {
-      for (const { box: child } of effectiveBox.children) {
-        body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+      if (renderingEffectiveIds.has(effectiveBox.id)) {
+        const cycleEl = document.createElement("div");
+        cycleEl.className = "box-cycle";
+        cycleEl.textContent = "↺";
+        body.appendChild(cycleEl);
+      } else {
+        renderingEffectiveIds.add(effectiveBox.id);
+        for (const { box: child } of effectiveBox.children) {
+          body.appendChild((tooSmall || child.display === "icon") ? buildIcon(child) : buildWindow(child));
+        }
+        renderingEffectiveIds.delete(effectiveBox.id);
       }
     }
     if (effectiveBox.text) {
