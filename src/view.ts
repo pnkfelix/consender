@@ -6,7 +6,7 @@ import { getBoxTitle, isPointer } from "./model.js";
 import {
   canUndo,
   findBox,
-  getPathForBoxId,
+  getBoxPathString,
   loadOrInit,
   mkAddBox,
   mkCollapseBox,
@@ -747,6 +747,9 @@ function buildWindow(box: Box): HTMLElement {
     const found = findBox(root, box.pointerToId);
     pointerTarget = (found && !isPointer(found)) ? found : null;
     effectiveBox = pointerTarget;
+    if (pointerTarget) {
+      box.pointerPath = getBoxPathString(pointerTarget);
+    }
   } else {
     effectiveBox = box;
   }
@@ -944,11 +947,10 @@ function buildWindow(box: Box): HTMLElement {
     msg.className = "box-pointer-missing";
     msg.textContent = "⚠ reference not found";
     body.appendChild(msg);
-    const path = getPathForBoxId(root, box.pointerToId);
-    if (path) {
+    if (box.pointerPath) {
       const pathEl = document.createElement("div");
       pathEl.className = "box-pointer-missing-path";
-      pathEl.textContent = path;
+      pathEl.textContent = box.pointerPath;
       body.appendChild(pathEl);
     }
   } else if (effectiveBox) {
