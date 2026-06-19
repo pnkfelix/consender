@@ -134,11 +134,7 @@ const helpMap: Record<string, string> = {
     "H (0–360°) number boxes specifying a color directly in the OKLCH perceptual color space.",
   "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script, " +
     "backgroundColor, textColor, oklch.",
-  "builtinCommands": "Primitive script commands: " +
-    "iconify — set selected boxes to icon display; " +
-    "windowify — set selected boxes to window display; " +
-    "clear-focus — deselect all boxes; " +
-    "link — add pointer children in the focused box pointing to each selected box.",
+  "builtinCommands": "Primitive script commands: iconify, windowify, clear-focus, link.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
