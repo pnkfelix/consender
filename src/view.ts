@@ -192,9 +192,13 @@ function updateSelection(): void {
   if (zoomSelBtn) zoomSelBtn.disabled = selectedBoxIds.size === 0;
   const selectModeBtn = document.querySelector<HTMLButtonElement>(".mode-btn-select");
   if (selectModeBtn) {
-    selectModeBtn.textContent = selectedBoxIds.size > 0
-      ? `select (${selectedBoxIds.size})`
-      : "select";
+    selectModeBtn.textContent = "select";
+    if (selectedBoxIds.size > 0) {
+      const countSpan = document.createElement("span");
+      countSpan.className = "selection-count";
+      countSpan.textContent = ` (${selectedBoxIds.size})`;
+      selectModeBtn.appendChild(countSpan);
+    }
   }
   updateHelpBar();
 }
@@ -252,10 +256,18 @@ function buildModeSwitcher(): HTMLElement {
   el.className = "mode-switcher";
   for (const m of ["select", "act"] as Mode[]) {
     const btn = document.createElement("button");
-    btn.textContent = m === "select" && selectedBoxIds.size > 0
-      ? `select (${selectedBoxIds.size})`
-      : m;
-    if (m === "select") btn.classList.add("mode-btn-select");
+    if (m === "select") {
+      btn.classList.add("mode-btn-select");
+      btn.textContent = "select";
+      if (selectedBoxIds.size > 0) {
+        const countSpan = document.createElement("span");
+        countSpan.className = "selection-count";
+        countSpan.textContent = ` (${selectedBoxIds.size})`;
+        btn.appendChild(countSpan);
+      }
+    } else {
+      btn.textContent = m;
+    }
     if (mode === m) btn.classList.add("mode-btn-active");
     btn.onclick = () => {
       if (mode === m) return;

@@ -438,3 +438,5 @@ html, body, #app {
   background: var(--bar-ink);
   color: var(--bar-bg);
 }
+
+.selection-count { color: #4a90d9; }
