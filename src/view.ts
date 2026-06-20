@@ -1018,6 +1018,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
       collapseBtn.textContent = "⤵";
       collapseBtn.onclick = () => {
         if (!regularBox.parent) return;
+        selectedBoxIds.delete(regularBox.id);
         const op = mkCollapseBox(regularBox);
         const result = recordOn(root, worldId, op);
         root = result.root;
