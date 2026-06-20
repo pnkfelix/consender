@@ -136,6 +136,18 @@ function ishBase(token: string): string | null {
   return candidates.find(s => baseAnchor(s)) ?? null;
 }
 
+// Average several OKLCH colors with equal weight, in OKLab (rectangular a/b) so
+// hue interpolates along the shortest path and complementary colors gray out
+// rather than swinging through an arbitrary intermediate hue. Returns null for
+// an empty set. Used to compose multiple like-named color config boxes (e.g.
+// several `textColor` children) into a single color, independent of their
+// order.
+export function blendColors(colors: Oklch[]): Oklch | null {
+  if (colors.length === 0) return null;
+  if (colors.length === 1) return colors[0];
+  return blend(colors.map(c => ({ c, w: 1 })));
+}
+
 // Average a set of OKLCH anchors in OKLab (rectangular a/b), which interpolates
 // hue along the shortest path, then return to cylindrical form.
 function blend(parts: Array<{ c: Oklch; w: number }>): Oklch {

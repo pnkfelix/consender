@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import { runScript } from "./script.js";
-import { parseColorWords, oklchToCss, type Oklch } from "./color.js";
+import { parseColorWords, oklchToCss, blendColors, type Oklch } from "./color.js";
 import type { Box, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
 import {
@@ -310,34 +310,58 @@ function readNumberChild(box: RegularBox, name: string): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
+// Follows an alias (pointer box) to the regular box it ultimately targets,
+// guarding against pointer cycles. A non-pointer box is returned unchanged;
+// a dangling or looping chain yields null.
+function derefBox(box: Box): RegularBox | null {
+  const seen = new Set<string>();
+  let cur: Box | null = box;
+  while (cur && isPointer(cur)) {
+    if (seen.has(cur.id)) return null;
+    seen.add(cur.id);
+    cur = findBox(root, cur.pointerToId);
+  }
+  return cur && !isPointer(cur) ? cur : null;
+}
+
 // Resolves the OKLCH value carried by a backgroundColor/textColor config box.
 // Two forms: a structural `oklch` child carrying L/C/H number boxes, or the
-// box's own text parsed as compositional color words.
+// box's own text parsed as compositional color words. An alias to a color box
+// is dereferenced first, so a `textColor` alias resolves like the box it points
+// at rather than reading as colorless.
 function readColorBoxValue(box: Box): Oklch | null {
-  if (isPointer(box)) return null;
-  const oklchChild = box.children.find(c => c.title.trim().toLowerCase() === "oklch");
+  const target = derefBox(box);
+  if (!target) return null;
+  const oklchChild = target.children.find(c => c.title.trim().toLowerCase() === "oklch");
   if (oklchChild && !isPointer(oklchChild.box)) {
     const L = readNumberChild(oklchChild.box, "l");
     const C = readNumberChild(oklchChild.box, "c");
     const H = readNumberChild(oklchChild.box, "h");
     return L !== null && C !== null && H !== null ? { L, C, H } : null;
   }
-  return parseColorWords(box.text);
+  return parseColorWords(target.text);
 }
 
 // A color attribute (backgroundColor / textColor) is configured by a like-named
 // child box. It applies to that box and inherits down to all descendants; the
-// nearest setting walking up the tree wins, so a child's own setting overrides
-// an inherited one. Returns a CSS color string, or null if unset/unresolvable.
+// nearest level walking up the tree wins, so a child's own setting overrides an
+// inherited one. When a box carries several like-named children, their colors
+// are composed (blended in OKLab) rather than one being picked — so the result
+// is a function of the visible boxes, not of the order they were created or
+// whether any of them is an alias. Returns a CSS color string, or null if
+// unset/unresolvable.
 function resolveColorAttr(box: Box, attr: string): string | null {
   let cur: Box | null = box;
   while (cur !== null) {
     if (!isPointer(cur)) {
-      const cfg = cur.children.find(c => c.title.trim() === attr);
-      if (cfg) {
-        const val = readColorBoxValue(cfg.box);
-        if (val) return oklchToCss(val);
+      const vals: Oklch[] = [];
+      for (const c of cur.children) {
+        if (c.title.trim() !== attr) continue;
+        const val = readColorBoxValue(c.box);
+        if (val) vals.push(val);
       }
+      const composed = blendColors(vals);
+      if (composed) return oklchToCss(composed);
     }
     cur = cur.parent;
   }
