@@ -677,7 +677,7 @@ function iconValueWord(box: Box): string | null {
 
 function buildIcon(box: Box): HTMLElement {
   const el = document.createElement("div");
-  el.className = "box-icon";
+  el.className = isPointer(box) ? "box-icon box-pointer" : "box-icon";
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
 
