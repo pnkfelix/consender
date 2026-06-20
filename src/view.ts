@@ -177,12 +177,29 @@ function updateHelpBar(): void {
   helpEl.style.display = text != null ? "block" : "none";
 }
 
+function deselectSubtree(box: Box): void {
+  selectedBoxIds.delete(box.id);
+  if (!isPointer(box)) {
+    for (const { box: child } of box.children) deselectSubtree(child);
+  }
+}
+
 function updateSelection(): void {
   document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
     el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
   const zoomSelBtn = document.querySelector<HTMLButtonElement>(".zoom-sel-btn");
   if (zoomSelBtn) zoomSelBtn.disabled = selectedBoxIds.size === 0;
+  const selectModeBtn = document.querySelector<HTMLButtonElement>(".mode-btn-select");
+  if (selectModeBtn) {
+    selectModeBtn.textContent = "select";
+    if (selectedBoxIds.size > 0) {
+      const countSpan = document.createElement("span");
+      countSpan.className = "selection-count";
+      countSpan.textContent = ` (${selectedBoxIds.size})`;
+      selectModeBtn.appendChild(countSpan);
+    }
+  }
   updateHelpBar();
 }
 
@@ -239,7 +256,18 @@ function buildModeSwitcher(): HTMLElement {
   el.className = "mode-switcher";
   for (const m of ["select", "act"] as Mode[]) {
     const btn = document.createElement("button");
-    btn.textContent = m;
+    if (m === "select") {
+      btn.classList.add("mode-btn-select");
+      btn.textContent = "select";
+      if (selectedBoxIds.size > 0) {
+        const countSpan = document.createElement("span");
+        countSpan.className = "selection-count";
+        countSpan.textContent = ` (${selectedBoxIds.size})`;
+        btn.appendChild(countSpan);
+      }
+    } else {
+      btn.textContent = m;
+    }
     if (mode === m) btn.classList.add("mode-btn-active");
     btn.onclick = () => {
       if (mode === m) return;
@@ -388,6 +416,7 @@ export function mount(app: HTMLElement): void {
         const result = undoBox(world, root, worldId);
         root = result.root;
         worldId = result.worldId;
+        selectedBoxIds.clear();
         render();
       }
     } else if (e.ctrlKey && (e.key === "y" || e.key === "Z")) {
@@ -397,6 +426,7 @@ export function mount(app: HTMLElement): void {
         const result = redoBox(world, root, worldId);
         root = result.root;
         worldId = result.worldId;
+        selectedBoxIds.clear();
         render();
       }
     }
@@ -500,6 +530,7 @@ function buildWorld(box: RegularBox): HTMLElement {
       const result = undoBox(box, root, worldId);
       root = result.root;
       worldId = result.worldId;
+      selectedBoxIds.clear();
       render();
     };
     bar.appendChild(undoBtn);
@@ -512,6 +543,7 @@ function buildWorld(box: RegularBox): HTMLElement {
       const result = redoBox(box, root, worldId);
       root = result.root;
       worldId = result.worldId;
+      selectedBoxIds.clear();
       render();
     };
     bar.appendChild(redoBtn);
@@ -960,6 +992,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
       const result = undoBox(box, root, worldId);
       root = result.root;
       worldId = result.worldId;
+      selectedBoxIds.clear();
       render();
     };
     ribbon.appendChild(undoBtn);
@@ -972,6 +1005,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
       const result = redoBox(box, root, worldId);
       root = result.root;
       worldId = result.worldId;
+      selectedBoxIds.clear();
       render();
     };
     ribbon.appendChild(redoBtn);
@@ -996,6 +1030,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
       collapseBtn.textContent = "⤵";
       collapseBtn.onclick = () => {
         if (!regularBox.parent) return;
+        selectedBoxIds.delete(regularBox.id);
         const op = mkCollapseBox(regularBox);
         const result = recordOn(root, worldId, op);
         root = result.root;
@@ -1011,6 +1046,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
   delBtn.textContent = "✕";
   delBtn.onclick = () => {
     if (!box.parent) return;
+    deselectSubtree(box);
     const op = mkRemoveBox(box);
     const result = recordOn(root, worldId, op);
     root = result.root;
