@@ -290,6 +290,8 @@ export function invertOp(op: Op): Op {
       return { kind: "SetBoxText", id: op.id, text: op.prevText, prevText: op.text };
     case "SetDisplay":
       return { kind: "SetDisplay", id: op.id, display: op.prevDisplay, prevDisplay: op.display };
+    case "ReorderChild":
+      return { kind: "ReorderChild", parentId: op.parentId, childId: op.childId, fromIndex: op.toIndex, toIndex: op.fromIndex };
     case "AddBox":
       return { kind: "RemoveBox", parentId: op.parentId, index: op.index, title: op.title, subtree: op.subtree };
     case "RemoveBox":
@@ -491,6 +493,14 @@ export function applyOp(
       if (worldId === op.boxId) newWorldId = op.parentId;
       return { root, worldId: newWorldId };
     }
+    case "ReorderChild": {
+      const parent = findBox(root, op.parentId);
+      if (parent && !isPointer(parent)) {
+        const [item] = parent.children.splice(op.fromIndex, 1);
+        parent.children.splice(op.toIndex, 0, item);
+      }
+      return { root, worldId };
+    }
     case "BatchOp": {
       let cur = { root, worldId };
       for (const subOp of op.ops) {
@@ -542,6 +552,8 @@ function stackBoxId(op: Op, root: Box): string | null {
       return findBox(root, op.id)?.parent?.id ?? op.id;
     case "SetDisplay":
       return null;
+    case "ReorderChild":
+      return op.parentId;
     case "SetBoxText":
       return op.id;
     case "AddBox":
@@ -690,6 +702,16 @@ export function mkResizeBox(
   newH: number
 ): Op {
   return { kind: "ResizeBox", id: box.id, w: newW, h: newH, prevW: box.w, prevH: box.h };
+}
+
+export function mkReorderChild(box: Box, dlayer: number): Op | null {
+  if (!box.parent || dlayer === 0) return null;
+  const parent = box.parent;
+  const fromIndex = parent.children.findIndex(c => c.box === box);
+  if (fromIndex === -1) return null;
+  const toIndex = Math.max(0, Math.min(parent.children.length - 1, fromIndex + dlayer));
+  if (toIndex === fromIndex) return null;
+  return { kind: "ReorderChild", parentId: parent.id, childId: box.id, fromIndex, toIndex };
 }
 
 export function mkRenameBox(
