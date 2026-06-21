@@ -440,3 +440,118 @@ html, body, #app {
 }
 
 .selection-count { color: #4a90d9; }
+
+/* ---- mobile stacking layout (viewport < 600px) ---- */
+.mobile-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.mobile-world-text {
+  padding: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mobile-card {
+  border: 1.5px solid var(--border);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.mobile-card.mobile-card-pointer {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.mobile-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 44px;
+  background: var(--chrome);
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.mobile-card-bar button {
+  font: inherit;
+  font-size: 13px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #aaa;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 4px;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
+.mobile-card-bar button:hover { background: #fff; }
+
+.mobile-card-label {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-card-body {
+  padding: 8px;
+  position: relative;
+}
+
+.mobile-card-text {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 4px 0;
+}
+
+.mobile-card-children {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  margin-left: 12px;
+  border-left: 2px solid var(--chrome);
+  padding-left: 8px;
+}
+
+/* Render layers inside mobile cards: flow layout instead of absolute fill */
+.mobile-card-body .box-svg-layer,
+.mobile-card-body .box-markdown-layer {
+  position: relative;
+  min-height: 150px;
+  inset: auto;
+}
+
+/* Text editor inside a mobile card */
+.mobile-text-editor {
+  position: relative !important;
+  width: 100%;
+  min-height: 120px;
+  inset: auto;
+}
+
+/* Focus and selection states */
+.mobile-card.box-focused > .mobile-card-bar { box-shadow: inset 0 3px 0 0 #c8860a; }
+.mobile-card.box-focus-parent > .mobile-card-body { box-shadow: inset 0 0 0 3px #c8860a; }
+.mobile-card.box-selected { animation: window-selected-pulse 1.4s ease-in-out infinite; }

@@ -184,8 +184,12 @@ function deselectSubtree(box: Box): void {
   }
 }
 
+function isMobileLayout(): boolean {
+  return window.innerWidth < 600;
+}
+
 function updateSelection(): void {
-  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card").forEach(el => {
     el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
   const zoomSelBtn = document.querySelector<HTMLButtonElement>(".zoom-sel-btn");
@@ -243,7 +247,7 @@ function recomputeFocusParent(): void {
 
 function updateFocusHighlight(): void {
   recomputeFocusParent();
-  document.querySelectorAll<HTMLElement>(".box-window, .box-icon").forEach(el => {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card").forEach(el => {
     const id = el.dataset.boxId ?? "";
     el.classList.toggle("box-focused", id === focusedBoxId);
     el.classList.toggle("box-focus-parent", focusedParentBoxId !== null && id === focusedParentBoxId);
@@ -598,21 +602,28 @@ function buildWorld(box: RegularBox): HTMLElement {
 
   const isRenderedWorld = getBoxRenderMode(box) !== "text" && !rawViewBoxIds.has(box.id);
   if (!isRenderedWorld) {
-    // Children in the world use the full viewport as their parent body rect.
-    // WINDOW_BAR_H approximates the world title bar height.
-    const worldBodyRect: ScreenRect = {
-      x: 0, y: WINDOW_BAR_H,
-      w: window.innerWidth, h: window.innerHeight - WINDOW_BAR_H,
-    };
-    for (const { box: child } of box.children) {
-      content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child, worldBodyRect));
+    if (isMobileLayout()) {
+      content.appendChild(buildStackList(box));
+    } else {
+      // Children in the world use the full viewport as their parent body rect.
+      // WINDOW_BAR_H approximates the world title bar height.
+      const worldBodyRect: ScreenRect = {
+        x: 0, y: WINDOW_BAR_H,
+        w: window.innerWidth, h: window.innerHeight - WINDOW_BAR_H,
+      };
+      for (const { box: child } of box.children) {
+        content.appendChild(child.display === "icon" ? buildIcon(child) : buildWindow(child, worldBodyRect));
+      }
     }
   }
-  makeLassoGesture(content, box);
+  if (!isMobileLayout()) {
+    makeLassoGesture(content, box);
+  }
   if (box.text) {
     if (isRenderedWorld) {
       content.insertBefore(buildRenderLayer(box), content.firstChild);
-    } else {
+    } else if (!isMobileLayout()) {
+      // Mobile stacking view renders world text inside buildStackList.
       const tl = buildTextLayer(box, window.innerWidth, window.innerHeight - 48);
       tl.dataset.worldTextLayer = "1";
       content.insertBefore(tl, content.firstChild);
@@ -863,6 +874,236 @@ function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_B
   }
 
   return layer;
+}
+
+function buildStackCard(box: Box): HTMLElement {
+  let pointerTarget: RegularBox | null = null;
+  let effectiveBox: RegularBox | null;
+  if (isPointer(box)) {
+    const found = findBox(root, box.pointerToId);
+    pointerTarget = (found && !isPointer(found)) ? found : null;
+    effectiveBox = pointerTarget;
+    if (pointerTarget) box.pointerPath = getBoxPathString(pointerTarget);
+  } else {
+    effectiveBox = box;
+  }
+
+  const card = document.createElement("div");
+  card.className = isPointer(box) ? "mobile-card mobile-card-pointer" : "mobile-card";
+  card.dataset.boxId = box.id;
+  if (selectedBoxIds.has(box.id)) card.classList.add("box-selected");
+  if (focusedBoxId === box.id) card.classList.add("box-focused");
+  if (focusedParentBoxId === box.id) card.classList.add("box-focus-parent");
+
+  card.addEventListener("pointerdown", (e: PointerEvent) => {
+    const onButton = !!(e.target as HTMLElement).closest("button");
+    if (!onButton) {
+      const wasFocused = focusedBoxId === box.id;
+      if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
+      if (mode === "select") {
+        if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
+        else selectedBoxIds.add(box.id);
+        updateSelection();
+      }
+    }
+    e.stopPropagation();
+  });
+
+  const bar = document.createElement("div");
+  bar.className = "mobile-card-bar";
+
+  if (isPointer(box)) {
+    const glyph = document.createElement("span");
+    glyph.className = "box-pointer-glyph";
+    glyph.textContent = "→";
+    bar.appendChild(glyph);
+  }
+
+  const label = document.createElement("span");
+  label.className = "mobile-card-label";
+  label.textContent = getBoxTitle(box);
+  bar.appendChild(label);
+
+  const ribbon = document.createElement("div");
+  ribbon.className = "box-ribbon";
+
+  const mobileScript = effectiveBox && !isPointer(box) ? getBoxScript(effectiveBox) : null;
+  if (mobileScript !== null) {
+    const runBtn = document.createElement("button");
+    runBtn.title = "run script";
+    runBtn.textContent = "▶";
+    runBtn.disabled = mobileScript.length === 0;
+    runBtn.onclick = () => {
+      if (!mobileScript) return;
+      const result = runScript(mobileScript, root, worldId, selectedBoxIds, focusedBoxId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    ribbon.appendChild(runBtn);
+  }
+
+  const fullBtn = document.createElement("button");
+  if (isPointer(box) && pointerTarget) {
+    fullBtn.title = "go to referenced box";
+    fullBtn.textContent = "⤢";
+    fullBtn.onclick = () => {
+      worldId = pointerTarget!.parent ? pointerTarget!.parent.id : pointerTarget!.id;
+      focusedBoxId = pointerTarget!.id;
+      persist(root, worldId);
+      render();
+    };
+  } else {
+    fullBtn.title = "zoom in";
+    fullBtn.textContent = "⛶";
+    fullBtn.onclick = () => {
+      worldId = box.id;
+      persist(root, worldId);
+      render();
+    };
+  }
+  ribbon.appendChild(fullBtn);
+
+  const renameBtn = document.createElement("button");
+  renameBtn.title = "rename";
+  renameBtn.textContent = "✎";
+  renameBtn.onclick = () => {
+    const newTitle = window.prompt("Title:", getBoxTitle(box));
+    if (newTitle !== null) {
+      const result = recordOn(root, worldId, mkRenameBox(box, newTitle.trim()));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    }
+  };
+  ribbon.appendChild(renameBtn);
+
+  let textBtn: HTMLButtonElement | null = null;
+  if (effectiveBox) {
+    textBtn = document.createElement("button");
+    textBtn.title = "edit text";
+    textBtn.textContent = "T";
+    if (effectiveBox.text) textBtn.classList.add("box-btn-has-text");
+    ribbon.appendChild(textBtn);
+  }
+
+  const renderToggle = effectiveBox ? buildRenderToggleBtn(effectiveBox, box.id) : null;
+  if (renderToggle) ribbon.appendChild(renderToggle);
+
+  const delBtn = document.createElement("button");
+  delBtn.title = isPointer(box) ? "unlink" : "delete";
+  delBtn.textContent = "✕";
+  delBtn.onclick = () => {
+    if (!box.parent) return;
+    deselectSubtree(box);
+    const op = mkRemoveBox(box);
+    const result = recordOn(root, worldId, op);
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  ribbon.appendChild(delBtn);
+
+  bar.appendChild(ribbon);
+  card.appendChild(bar);
+
+  const body = document.createElement("div");
+  body.className = "mobile-card-body";
+
+  if (isPointer(box) && !pointerTarget) {
+    const msg = document.createElement("div");
+    msg.className = "box-pointer-missing";
+    msg.textContent = "⚠ reference not found";
+    if (box.pointerPath) {
+      const pathEl = document.createElement("div");
+      pathEl.className = "box-pointer-missing-path";
+      pathEl.textContent = box.pointerPath;
+      msg.appendChild(pathEl);
+    }
+    body.appendChild(msg);
+  } else if (effectiveBox) {
+    applyBoxColors(box, body, body);
+    const isRendered = getBoxRenderMode(effectiveBox) !== "text" && !rawViewBoxIds.has(box.id);
+
+    if (effectiveBox.text) {
+      if (isRendered) {
+        body.appendChild(buildRenderLayer(effectiveBox));
+      } else {
+        const textEl = document.createElement("div");
+        textEl.className = "mobile-card-text";
+        textEl.textContent = effectiveBox.text;
+        body.appendChild(textEl);
+      }
+    }
+
+    if (effectiveBox.children.length > 0) {
+      const nested = document.createElement("div");
+      nested.className = "mobile-card-children";
+      for (const { box: child } of effectiveBox.children) {
+        nested.appendChild(buildStackCard(child));
+      }
+      body.appendChild(nested);
+    }
+
+    if (textBtn) {
+      const textTarget = effectiveBox;
+      textBtn.onclick = () => {
+        const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
+        if (existing) { existing.focus(); return; }
+        body.innerHTML = "";
+
+        const ta = document.createElement("textarea");
+        ta.className = "box-text-editor mobile-text-editor";
+        ta.value = textTarget.text;
+        ta.placeholder = "Enter text…";
+
+        const prevText = textTarget.text;
+        let done = false;
+
+        const commit = () => {
+          if (done) return;
+          done = true;
+          if (ta.value !== prevText) {
+            const result = recordOn(root, worldId, mkSetBoxText(textTarget, ta.value));
+            root = result.root;
+            worldId = result.worldId;
+          }
+          render();
+        };
+
+        ta.addEventListener("blur", commit);
+        ta.addEventListener("keydown", (ke: KeyboardEvent) => {
+          ke.stopPropagation();
+          if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
+        });
+
+        body.appendChild(ta);
+        ta.focus();
+      };
+    }
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+function buildStackList(parent: RegularBox): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "mobile-stack";
+  applyBoxColors(parent, el, el);
+
+  if (parent.text) {
+    const textEl = document.createElement("div");
+    textEl.className = "mobile-world-text";
+    textEl.textContent = parent.text;
+    el.appendChild(textEl);
+  }
+
+  for (const { box: child } of parent.children) {
+    el.appendChild(buildStackCard(child));
+  }
+
+  return el;
 }
 
 function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
