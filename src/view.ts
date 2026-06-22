@@ -586,7 +586,7 @@ function buildWorld(box: RegularBox): HTMLElement {
   const renderToggle = buildRenderToggleBtn(box);
   if (renderToggle) bar.appendChild(renderToggle);
 
-  bar.appendChild(buildModeSwitcher());
+  if (!isMobileLayout()) bar.appendChild(buildModeSwitcher());
 
   el.appendChild(bar);
 
