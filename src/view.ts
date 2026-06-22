@@ -179,6 +179,7 @@ function updateHelpBar(): void {
 
 function deselectSubtree(box: Box): void {
   selectedBoxIds.delete(box.id);
+  if (focusedBoxId === box.id) { focusedBoxId = null; }
   if (!isPointer(box)) {
     for (const { box: child } of box.children) deselectSubtree(child);
   }
