@@ -546,6 +546,7 @@ function buildWorld(box: RegularBox): HTMLElement {
     runBtn.disabled = worldScript.length === 0;
     runBtn.onclick = () => {
       if (!worldScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -995,6 +996,7 @@ function buildStackCard(box: Box): HTMLElement {
     runBtn.disabled = mobileScript.length === 0;
     runBtn.onclick = () => {
       if (!mobileScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(mobileScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -1269,6 +1271,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
     runBtn.disabled = windowScript.length === 0;
     runBtn.onclick = () => {
       if (!windowScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
