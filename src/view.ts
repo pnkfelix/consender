@@ -189,7 +189,7 @@ function isMobileLayout(): boolean {
 }
 
 function updateSelection(): void {
-  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card").forEach(el => {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card, .mobile-chip").forEach(el => {
     el.classList.toggle("box-selected", selectedBoxIds.has(el.dataset.boxId ?? ""));
   });
   const zoomSelBtn = document.querySelector<HTMLButtonElement>(".zoom-sel-btn");
@@ -247,7 +247,7 @@ function recomputeFocusParent(): void {
 
 function updateFocusHighlight(): void {
   recomputeFocusParent();
-  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card").forEach(el => {
+  document.querySelectorAll<HTMLElement>(".box-window, .box-icon, .mobile-card, .mobile-chip").forEach(el => {
     const id = el.dataset.boxId ?? "";
     el.classList.toggle("box-focused", id === focusedBoxId);
     el.classList.toggle("box-focus-parent", focusedParentBoxId !== null && id === focusedParentBoxId);
@@ -1105,7 +1105,7 @@ function buildStackCard(box: Box): HTMLElement {
       const nested = document.createElement("div");
       nested.className = "mobile-card-children";
       for (const { box: child } of effectiveBox.children) {
-        nested.appendChild(buildStackCard(child));
+        nested.appendChild(child.display === "icon" ? buildStackChip(child) : buildStackCard(child));
       }
       body.appendChild(nested);
     }
@@ -1152,6 +1152,79 @@ function buildStackCard(box: Box): HTMLElement {
   return card;
 }
 
+function buildStackChip(box: Box): HTMLElement {
+  let pointerTarget: RegularBox | null = null;
+  let effectiveBox: RegularBox | null;
+  if (isPointer(box)) {
+    const found = findBox(root, box.pointerToId);
+    pointerTarget = (found && !isPointer(found)) ? found : null;
+    effectiveBox = pointerTarget;
+    if (pointerTarget) box.pointerPath = getBoxPathString(pointerTarget);
+  } else {
+    effectiveBox = box;
+  }
+
+  const chip = document.createElement("div");
+  chip.className = isPointer(box) ? "mobile-chip mobile-chip-pointer" : "mobile-chip";
+  chip.dataset.boxId = box.id;
+  if (selectedBoxIds.has(box.id)) chip.classList.add("box-selected");
+  if (focusedBoxId === box.id) chip.classList.add("box-focused");
+
+  chip.addEventListener("pointerdown", (e: PointerEvent) => {
+    const onButton = !!(e.target as HTMLElement).closest("button");
+    if (!onButton) {
+      const wasFocused = focusedBoxId === box.id;
+      if (!wasFocused) { focusedBoxId = box.id; updateFocusHighlight(); }
+      if (mode === "select") {
+        if (selectedBoxIds.has(box.id)) selectedBoxIds.delete(box.id);
+        else selectedBoxIds.add(box.id);
+        updateSelection();
+      }
+    }
+    e.stopPropagation();
+  });
+
+  if (isPointer(box)) {
+    const glyph = document.createElement("span");
+    glyph.textContent = "→";
+    chip.appendChild(glyph);
+  }
+
+  const expandBtn = document.createElement("button");
+  expandBtn.className = "box-expand-toggle";
+  expandBtn.textContent = "▶";
+  expandBtn.onclick = () => {
+    const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  chip.appendChild(expandBtn);
+
+  const label = document.createElement("span");
+  label.className = "mobile-chip-label";
+  label.textContent = getBoxTitle(box);
+  chip.appendChild(label);
+
+  const chipScript = effectiveBox ? getBoxScript(effectiveBox) : null;
+  if (chipScript !== null) {
+    const runBtn = document.createElement("button");
+    runBtn.textContent = "▶";
+    runBtn.title = "run script";
+    runBtn.disabled = chipScript.length === 0;
+    runBtn.onclick = () => {
+      if (!chipScript) return;
+      const result = runScript(chipScript, root, worldId, selectedBoxIds, focusedBoxId);
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    chip.appendChild(runBtn);
+  }
+
+  return chip;
+}
+
 function buildStackList(parent: RegularBox): HTMLElement {
   const el = document.createElement("div");
   el.className = "mobile-stack";
@@ -1165,7 +1238,7 @@ function buildStackList(parent: RegularBox): HTMLElement {
   }
 
   for (const { box: child } of parent.children) {
-    el.appendChild(buildStackCard(child));
+    el.appendChild(child.display === "icon" ? buildStackChip(child) : buildStackCard(child));
   }
 
   return el;

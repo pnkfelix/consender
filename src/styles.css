@@ -522,7 +522,9 @@ html, body, #app {
 /* ---- mobile stacking layout (viewport < 600px) ---- */
 .mobile-stack {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px;
   overflow-y: auto;
@@ -531,6 +533,7 @@ html, body, #app {
 }
 
 .mobile-world-text {
+  flex-basis: 100%;
   padding: 8px;
   font-size: 13px;
   line-height: 1.55;
@@ -539,6 +542,7 @@ html, body, #app {
 }
 
 .mobile-card {
+  flex-basis: 100%;
   border: 1.5px solid var(--border);
   background: var(--box-bg);
   display: flex;
@@ -551,6 +555,52 @@ html, body, #app {
   border-style: dashed;
   border-width: 2px;
 }
+
+.mobile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  min-height: 36px;
+  border: 1.5px solid var(--border);
+  background: var(--box-bg);
+  border-radius: 18px;
+  font-size: 13px;
+  flex-shrink: 0;
+  --drop-shadow: 0 0 0 0 transparent;
+}
+
+.mobile-chip.mobile-chip-pointer {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.mobile-chip-label {
+  font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-chip button {
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #aaa;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 14px;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
+.mobile-chip button:hover { background: var(--btn-hover-bg); }
+
+.mobile-chip.box-focused { box-shadow: inset 0 2px 0 0 #c8860a; }
+.mobile-chip.box-selected { animation: window-selected-pulse 1.4s ease-in-out infinite; }
 
 .mobile-card-bar {
   display: flex;
