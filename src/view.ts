@@ -757,7 +757,7 @@ function buildIcon(box: Box): HTMLElement {
   const toggleBtn = document.createElement("button");
   toggleBtn.className = "box-expand-toggle";
   toggleBtn.title = "expand";
-  toggleBtn.textContent = "▶";
+  toggleBtn.textContent = "›";
   toggleBtn.onclick = () => {
     const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
     root = result.root;
@@ -953,7 +953,7 @@ function buildStackCard(box: Box): HTMLElement {
   cardToggleBtn.className = "box-expand-toggle";
   if (box.display === "icon") {
     cardToggleBtn.title = "expand";
-    cardToggleBtn.textContent = "▶";
+    cardToggleBtn.textContent = "›";
     cardToggleBtn.onclick = () => {
       const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
       root = result.root;
@@ -962,7 +962,7 @@ function buildStackCard(box: Box): HTMLElement {
     };
   } else {
     cardToggleBtn.title = "collapse";
-    cardToggleBtn.textContent = "▼";
+    cardToggleBtn.textContent = "⌄";
     cardToggleBtn.onclick = () => {
       const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
       root = result.root;
@@ -1236,7 +1236,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
   const winToggleBtn = document.createElement("button");
   winToggleBtn.className = "box-expand-toggle";
   winToggleBtn.title = "collapse";
-  winToggleBtn.textContent = "▼";
+  winToggleBtn.textContent = "⌄";
   winToggleBtn.onclick = () => {
     const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
     root = result.root;
