@@ -134,7 +134,7 @@ const helpMap: Record<string, string> = {
     "H (0–360°) number boxes specifying a color directly in the OKLCH perceptual color space.",
   "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script, " +
     "backgroundColor, textColor, oklch.",
-  "builtinCommands": "Primitive script commands: help, iconify, windowify, clear-focus, link, darkTheme, lightTheme.",
+  "builtinCommands": "Primitive script commands: help, iconify, windowify, clear-focus, link, darkTheme, lightTheme, nudgeBox.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
@@ -552,7 +552,7 @@ function buildWorld(box: RegularBox): HTMLElement {
     runBtn.onclick = () => {
       if (!worldScript) return;
       if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
-      const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
+      const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId, box.id);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -798,7 +798,7 @@ function buildIcon(box: Box): HTMLElement {
     runBtn.disabled = iconScript.length === 0;
     runBtn.onclick = () => {
       if (!iconScript) return;
-      const result = runScript(iconScript, root, worldId, selectedBoxIds, focusedBoxId);
+      const result = runScript(iconScript, root, worldId, selectedBoxIds, focusedBoxId, box.id);
       root = result.root;
       worldId = result.worldId;
       render();
@@ -1358,7 +1358,7 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
     runBtn.onclick = () => {
       if (!windowScript) return;
       if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
-      const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
+      const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId, effectiveBox!.id);
       root = result.root;
       worldId = result.worldId;
       render();

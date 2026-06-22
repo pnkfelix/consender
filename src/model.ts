@@ -13,6 +13,7 @@ export type Op =
   | { kind: "RenameBox";        id: string; label: string; prevLabel: string }
   | { kind: "SetBoxText";       id: string; text: string; prevText: string }
   | { kind: "SetDisplay";       id: string; display: DisplayMode; prevDisplay: DisplayMode }
+  | { kind: "ReorderChild";     parentId: string; childId: string; fromIndex: number; toIndex: number }
   | { kind: "AddBox";           parentId: string; index: number; title: string; subtree: OpSubtree }
   | { kind: "RemoveBox";        parentId: string; index: number; title: string; subtree: OpSubtree }
   | { kind: "WrapInParent";     wrapperId: string; childId: string; childTitle: string; prevX: number; prevY: number }

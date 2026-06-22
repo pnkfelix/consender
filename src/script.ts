@@ -1,4 +1,4 @@
-import { applyOp, findBox, mkAddBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
+import { applyOp, findBox, mkAddBox, mkAddPointer, mkMoveBox, mkReorderChild, mkResizeBox, mkSetDisplay, persist } from "./history.js";
 import type { Box, DisplayMode, Op, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
 
@@ -8,6 +8,24 @@ interface ScriptContext {
   focusedBoxId: string | null;
   selectedBoxIds: Set<string>;
   pendingOps: Op[];
+  callerBox: Box | null;
+}
+
+function resolveParam(callerBox: Box, name: string, defaultVal = 0): number {
+  let current: Box | null = callerBox;
+  while (current !== null) {
+    if (!isPointer(current)) {
+      const found = current.children.find(c => c.title === name);
+      if (found) {
+        const b = found.box;
+        const text = isPointer(b) ? "" : b.text;
+        const n = parseFloat(text);
+        if (!isNaN(n)) return n;
+      }
+    }
+    current = current.parent;
+  }
+  return defaultVal;
 }
 
 type Word = (ctx: ScriptContext) => void;
@@ -60,6 +78,24 @@ const BUILTINS: Record<string, Word> = {
       ctx.pendingOps.push(op);
     }
   },
+  nudgeBox: (ctx) => {
+    if (!ctx.callerBox) return;
+    const dx = resolveParam(ctx.callerBox, "dx");
+    const dy = resolveParam(ctx.callerBox, "dy");
+    const dwidth = resolveParam(ctx.callerBox, "dwidth");
+    const dheight = resolveParam(ctx.callerBox, "dheight");
+    const dlayer = resolveParam(ctx.callerBox, "dlayer");
+    for (const id of ctx.selectedBoxIds) {
+      const box = findBox(ctx.root, id);
+      if (!box) continue;
+      if (dx !== 0 || dy !== 0) ctx.pendingOps.push(mkMoveBox(box, box.x + dx, box.y + dy));
+      if (dwidth !== 0 || dheight !== 0) ctx.pendingOps.push(mkResizeBox(box, box.w + dwidth, box.h + dheight));
+      if (dlayer !== 0) {
+        const op = mkReorderChild(box, dlayer);
+        if (op) ctx.pendingOps.push(op);
+      }
+    }
+  },
   "link": (ctx) => {
     if (!ctx.focusedBoxId) return;
     const focusBox = findBox(ctx.root, ctx.focusedBoxId);
@@ -101,10 +137,12 @@ export function runScript(
   root: Box,
   worldId: string,
   selectedBoxIds: Set<string>,
-  focusedBoxId: string | null = null
+  focusedBoxId: string | null = null,
+  callerBoxId: string | null = null
 ): { root: Box; worldId: string } {
   const tokens = scriptText.trim().split(/\s+/).filter(Boolean);
-  const ctx: ScriptContext = { root, worldId, focusedBoxId, selectedBoxIds, pendingOps: [] };
+  const callerBox = callerBoxId ? findBox(root, callerBoxId) ?? null : null;
+  const ctx: ScriptContext = { root, worldId, focusedBoxId, selectedBoxIds, pendingOps: [], callerBox };
 
   for (const token of tokens) {
     const word = BUILTINS[token];
