@@ -602,3 +602,5 @@ html, body, #app {
 .mobile-card.box-focused > .mobile-card-bar { box-shadow: inset 0 3px 0 0 #c8860a; }
 .mobile-card.box-focus-parent > .mobile-card-body { box-shadow: inset 0 0 0 3px #c8860a; }
 .mobile-card.box-selected { animation: window-selected-pulse 1.4s ease-in-out infinite; }
+
+.mobile-card-collapsed { opacity: 0.75; }

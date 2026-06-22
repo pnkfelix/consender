@@ -1006,8 +1006,32 @@ function buildStackCard(box: Box): HTMLElement {
   };
   ribbon.appendChild(renameBtn);
 
+  if (box.display === "icon") {
+    const expandBtn = document.createElement("button");
+    expandBtn.title = "expand";
+    expandBtn.textContent = "⬜";
+    expandBtn.onclick = () => {
+      const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    ribbon.appendChild(expandBtn);
+  } else {
+    const iconifyBtn = document.createElement("button");
+    iconifyBtn.title = "collapse";
+    iconifyBtn.textContent = "▪";
+    iconifyBtn.onclick = () => {
+      const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+    ribbon.appendChild(iconifyBtn);
+  }
+
   let textBtn: HTMLButtonElement | null = null;
-  if (effectiveBox) {
+  if (effectiveBox && box.display !== "icon") {
     textBtn = document.createElement("button");
     textBtn.title = "edit text";
     textBtn.textContent = "T";
@@ -1015,7 +1039,7 @@ function buildStackCard(box: Box): HTMLElement {
     ribbon.appendChild(textBtn);
   }
 
-  const renderToggle = effectiveBox ? buildRenderToggleBtn(effectiveBox, box.id) : null;
+  const renderToggle = (effectiveBox && box.display !== "icon") ? buildRenderToggleBtn(effectiveBox, box.id) : null;
   if (renderToggle) ribbon.appendChild(renderToggle);
 
   const delBtn = document.createElement("button");
@@ -1034,6 +1058,11 @@ function buildStackCard(box: Box): HTMLElement {
 
   bar.appendChild(ribbon);
   card.appendChild(bar);
+
+  if (box.display === "icon") {
+    card.classList.add("mobile-card-collapsed");
+    return card;
+  }
 
   const body = document.createElement("div");
   body.className = "mobile-card-body";
