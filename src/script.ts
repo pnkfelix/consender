@@ -60,6 +60,10 @@ const BUILTINS: Record<string, Word> = {
   },
 };
 
+export function isBuiltinCommand(word: string): boolean {
+  return Object.prototype.hasOwnProperty.call(BUILTINS, word);
+}
+
 export function runScript(
   scriptText: string,
   root: Box,
