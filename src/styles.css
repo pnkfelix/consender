@@ -441,6 +441,53 @@ html, body, #app {
 
 .selection-count { color: #4a90d9; }
 
+/* ---- mobile world titlebar: two-row layout ---- */
+.box-titlebar-mobile {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  min-height: unset;
+}
+
+.mobile-world-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  min-height: 44px;
+}
+
+.mobile-world-bar-row:first-child {
+  border-bottom: 1px solid #444;
+}
+
+.mobile-world-bar-row button {
+  font: inherit;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #555;
+  background: #3a3a3a;
+  color: var(--bar-ink);
+  cursor: pointer;
+  border-radius: 4px;
+  touch-action: manipulation;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mobile-world-bar-row button:hover { background: #555; }
+
+.mobile-world-bar-row .breadcrumb {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-world-bar-row .mode-switcher {
+  margin-left: auto;
+}
+
 /* ---- mobile stacking layout (viewport < 600px) ---- */
 .mobile-stack {
   display: flex;

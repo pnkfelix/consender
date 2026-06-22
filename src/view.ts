@@ -487,7 +487,8 @@ function buildWorld(box: RegularBox): HTMLElement {
 
   const bar = document.createElement("div");
   bar.className = "box-titlebar";
-  bar.appendChild(buildCrumb(box));
+
+  const crumb = buildCrumb(box);
 
   const newBtn = document.createElement("button");
   newBtn.textContent = "+ box";
@@ -498,7 +499,6 @@ function buildWorld(box: RegularBox): HTMLElement {
     worldId = result.worldId;
     render();
   };
-  bar.appendChild(newBtn);
 
   const outBtn = document.createElement("button");
   outBtn.textContent = "zoom out";
@@ -515,7 +515,6 @@ function buildWorld(box: RegularBox): HTMLElement {
       render();
     }
   };
-  bar.appendChild(outBtn);
 
   const zoomSelBtn = document.createElement("button");
   zoomSelBtn.textContent = "zoom sel";
@@ -529,11 +528,11 @@ function buildWorld(box: RegularBox): HTMLElement {
     persist(root, worldId);
     render();
   };
-  bar.appendChild(zoomSelBtn);
 
   const worldScript = getBoxScript(box);
+  let runBtn: HTMLButtonElement | null = null;
   if (worldScript !== null) {
-    const runBtn = document.createElement("button");
+    runBtn = document.createElement("button");
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = worldScript.length === 0;
@@ -544,13 +543,13 @@ function buildWorld(box: RegularBox): HTMLElement {
       worldId = result.worldId;
       render();
     };
-    bar.appendChild(runBtn);
   }
 
   const isRawMode = getBoxRenderMode(box) === "text" || rawViewBoxIds.has(box.id);
-
+  let undoBtn: HTMLButtonElement | null = null;
+  let redoBtn: HTMLButtonElement | null = null;
   if (isRawMode) {
-    const undoBtn = document.createElement("button");
+    undoBtn = document.createElement("button");
     undoBtn.title = "undo";
     undoBtn.textContent = "↩";
     undoBtn.disabled = !canUndo(box, root);
@@ -561,9 +560,8 @@ function buildWorld(box: RegularBox): HTMLElement {
       selectedBoxIds.clear();
       render();
     };
-    bar.appendChild(undoBtn);
 
-    const redoBtn = document.createElement("button");
+    redoBtn = document.createElement("button");
     redoBtn.title = "redo";
     redoBtn.textContent = "↪";
     redoBtn.disabled = box.redoStack.length === 0;
@@ -574,19 +572,49 @@ function buildWorld(box: RegularBox): HTMLElement {
       selectedBoxIds.clear();
       render();
     };
-    bar.appendChild(redoBtn);
   }
 
   const textBtn = document.createElement("button");
   textBtn.title = "edit text";
   textBtn.textContent = "T";
   if (box.text) textBtn.classList.add("box-btn-has-text");
-  bar.appendChild(textBtn);
 
   const renderToggle = buildRenderToggleBtn(box);
-  if (renderToggle) bar.appendChild(renderToggle);
+  const modeSwitcher = buildModeSwitcher();
 
-  if (!isMobileLayout()) bar.appendChild(buildModeSwitcher());
+  if (isMobileLayout()) {
+    bar.classList.add("box-titlebar-mobile");
+
+    const row1 = document.createElement("div");
+    row1.className = "mobile-world-bar-row";
+    row1.appendChild(crumb);
+    row1.appendChild(outBtn);
+
+    const row2 = document.createElement("div");
+    row2.className = "mobile-world-bar-row";
+    row2.appendChild(newBtn);
+    row2.appendChild(zoomSelBtn);
+    if (runBtn) row2.appendChild(runBtn);
+    if (undoBtn) row2.appendChild(undoBtn);
+    if (redoBtn) row2.appendChild(redoBtn);
+    row2.appendChild(textBtn);
+    if (renderToggle) row2.appendChild(renderToggle);
+    row2.appendChild(modeSwitcher);
+
+    bar.appendChild(row1);
+    bar.appendChild(row2);
+  } else {
+    bar.appendChild(crumb);
+    bar.appendChild(newBtn);
+    bar.appendChild(outBtn);
+    bar.appendChild(zoomSelBtn);
+    if (runBtn) bar.appendChild(runBtn);
+    if (undoBtn) bar.appendChild(undoBtn);
+    if (redoBtn) bar.appendChild(redoBtn);
+    bar.appendChild(textBtn);
+    if (renderToggle) bar.appendChild(renderToggle);
+    bar.appendChild(modeSwitcher);
+  }
 
   el.appendChild(bar);
 
