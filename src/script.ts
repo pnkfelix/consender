@@ -12,7 +12,17 @@ interface ScriptContext {
 
 type Word = (ctx: ScriptContext) => void;
 
+const THEME_KEY = "consender-theme";
+
 const BUILTINS: Record<string, Word> = {
+  darkTheme: (_ctx) => {
+    document.documentElement.dataset.theme = "dark";
+    localStorage.setItem(THEME_KEY, "dark");
+  },
+  lightTheme: (_ctx) => {
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem(THEME_KEY);
+  },
   iconify: (ctx) => {
     for (const id of ctx.selectedBoxIds) {
       const box = findBox(ctx.root, id);
