@@ -513,6 +513,7 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  --drop-shadow: 0 0 0 0 transparent;
 }
 
 .mobile-card.mobile-card-pointer {
