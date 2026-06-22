@@ -1,5 +1,5 @@
-import { applyOp, findBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
-import type { Box, Op, RegularBox } from "./model.js";
+import { applyOp, findBox, mkAddBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
+import type { Box, DisplayMode, Op, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
 
 interface ScriptContext {
@@ -37,6 +37,28 @@ const BUILTINS: Record<string, Word> = {
   },
   "clear-focus": (ctx) => {
     ctx.selectedBoxIds.clear();
+  },
+  "help": (ctx) => {
+    if (!ctx.focusedBoxId) return;
+    const focusBox = findBox(ctx.root, ctx.focusedBoxId);
+    if (!focusBox) return;
+    const destBox: RegularBox | null = (() => {
+      if (isPointer(focusBox)) {
+        const target = findBox(ctx.root, focusBox.pointerToId);
+        return target && !isPointer(target) ? target : null;
+      }
+      return focusBox;
+    })();
+    if (!destBox) return;
+    const extraSiblings: Array<{ x: number; y: number; w: number; h: number; display: DisplayMode }> = [];
+    for (const label of ["help", "builtinLabels", "builtinCommands"] as const) {
+      const op = mkAddBox(destBox, undefined, undefined, label, extraSiblings);
+      if (op.kind === "AddBox") {
+        const b = op.subtree.boxes[op.subtree.rootId];
+        if (b) extraSiblings.push({ x: b.x, y: b.y, w: b.w, h: b.h, display: "window" });
+      }
+      ctx.pendingOps.push(op);
+    }
   },
   "link": (ctx) => {
     if (!ctx.focusedBoxId) return;

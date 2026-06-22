@@ -765,11 +765,17 @@ function freshBoxPosition(
   return { x: 20 + Math.random() * 80, y: 20 + Math.random() * 60 };
 }
 
-export function mkAddBox(parent: RegularBox, parentW?: number, parentH?: number): Op {
+export function mkAddBox(
+  parent: RegularBox,
+  parentW?: number,
+  parentH?: number,
+  title = "",
+  extraSiblings: Array<{ x: number; y: number; w: number; h: number; display: DisplayMode }> = []
+): Op {
   const id = freshId();
   const pw = parentW ?? parent.w;
   const ph = parentH ?? Math.max(0, parent.h - BAR_H);
-  const { x, y } = freshBoxPosition(parent, pw, ph);
+  const { x, y } = freshBoxPosition(parent, pw, ph, extraSiblings);
   const serialized: SerializedBox = {
     id,
     display: "window",
@@ -787,8 +793,8 @@ export function mkAddBox(parent: RegularBox, parentW?: number, parentH?: number)
   return {
     kind: "AddBox",
     parentId: parent.id,
-    index: parent.children.length,
-    title: "",
+    index: parent.children.length + extraSiblings.length,
+    title,
     subtree,
   };
 }
