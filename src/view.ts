@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import { runScript } from "./script.js";
+import { isBuiltinCommand, runScript } from "./script.js";
 import { parseColorWords, oklchToCss, blendColors, type Oklch } from "./color.js";
 import type { Box, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
@@ -296,13 +296,21 @@ function getBoxRenderMode(box: Box): string {
   return KNOWN_RENDER_MODES.has(mode) ? mode : "text";
 }
 
-// Returns the box's own text if it is tagged as a command script box (has a child named "script"),
-// or null if it has no such child. The "script" child is a structural tag only — its own
-// text is irrelevant; the command list lives in the parent's text field.
+// Returns the script text for a box, or null if the box has no runnable script.
+//
+// Primary form: the box carries a child titled "script" (a structural tag); the
+// command list is the parent's own text field.
+//
+// Fallback (aggressive reinterpretation): if the box has no "script" child but
+// its own label IS a single valid command name, treat it as though the user wrote
+// that command in the text field and added a "script" child — i.e. return the
+// label itself as the script to run.
 function getBoxScript(box: Box): string | null {
   if (isPointer(box)) return null;
-  if (!box.children.some(c => c.title === "script")) return null;
-  return box.text.trim();
+  if (box.children.some(c => c.title === "script")) return box.text.trim();
+  const label = getBoxTitle(box).trim();
+  if (label && isBuiltinCommand(label)) return label;
+  return null;
 }
 
 // Reads a single number from a child box named `name` (case-insensitive),
