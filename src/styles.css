@@ -5,6 +5,21 @@
   --border: #2a2a2a;
   --bar-bg: #2a2a2a;
   --bar-ink: #f4f1ea;
+  --box-bg: #ffffff;
+  --editor-bg: #fffff8;
+  --btn-hover-bg: #ffffff;
+}
+
+html[data-theme="dark"] {
+  --bg: #111111;
+  --ink: #efefef;
+  --chrome: #2d2d2d;
+  --border: #555555;
+  --bar-bg: #0a0a0a;
+  --bar-ink: #efefef;
+  --box-bg: #1c1c1c;
+  --editor-bg: #141414;
+  --btn-hover-bg: #444444;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,7 +87,7 @@ html, body, #app {
 .box-window {
   position: absolute;
   border: 1.5px solid var(--border);
-  background: #fff;
+  background: var(--box-bg);
   display: flex;
   flex-direction: column;
   /* Drop shadow only when this box occludes a sibling (see .box-occluding); a
@@ -104,7 +119,7 @@ html, body, #app {
   border-color: #aaa;
 }
 
-.box-window-bar button:hover { background: #fff; }
+.box-window-bar button:hover { background: var(--btn-hover-bg); }
 
 /* Focus policy: hide buttons unless the box has UI focus */
 .box-window[data-toolbar-policy="focus"]:not(.box-focused) > .box-window-bar button {
@@ -150,7 +165,7 @@ html, body, #app {
   border: none;
   outline: 2px solid #888;
   padding: 6px;
-  background: #fffff8;
+  background: var(--editor-bg);
   color: var(--ink);
   line-height: 1.55;
 }
@@ -231,7 +246,7 @@ html, body, #app {
   touch-action: manipulation;
 }
 
-.box-icon button:hover { background: #fff; }
+.box-icon button:hover { background: var(--btn-hover-bg); }
 
 /* ---- help bar ---- */
 .help-bar {
@@ -509,7 +524,7 @@ html, body, #app {
 
 .mobile-card {
   border: 1.5px solid var(--border);
-  background: #fff;
+  background: var(--box-bg);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -548,7 +563,7 @@ html, body, #app {
   flex-shrink: 0;
 }
 
-.mobile-card-bar button:hover { background: #fff; }
+.mobile-card-bar button:hover { background: var(--btn-hover-bg); }
 
 .mobile-card-label {
   flex: 1;
