@@ -179,6 +179,7 @@ function updateHelpBar(): void {
 
 function deselectSubtree(box: Box): void {
   selectedBoxIds.delete(box.id);
+  if (focusedBoxId === box.id) { focusedBoxId = null; }
   if (!isPointer(box)) {
     for (const { box: child } of box.children) deselectSubtree(child);
   }
@@ -544,8 +545,13 @@ function buildWorld(box: RegularBox): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = worldScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!worldScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(worldScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -993,8 +999,13 @@ function buildStackCard(box: Box): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = mobileScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!mobileScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(mobileScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
@@ -1340,8 +1351,13 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = windowScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!windowScript) return;
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
       const result = runScript(windowScript, root, worldId, selectedBoxIds, focusedBoxId);
       root = result.root;
       worldId = result.worldId;
