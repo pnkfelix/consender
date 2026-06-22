@@ -106,12 +106,28 @@ html, body, #app {
 
 .box-window-bar button:hover { background: #fff; }
 
+/* Tree-view expand/collapse triangle — always visible, styled minimally */
+.box-expand-toggle {
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  opacity: 0.55;
+  font-size: 10px;
+  padding: 0 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  line-height: 1;
+}
+
+.box-expand-toggle:hover { opacity: 1; background: transparent !important; }
+
 /* Focus policy: hide buttons unless the box has UI focus */
-.box-window[data-toolbar-policy="focus"]:not(.box-focused) > .box-window-bar button {
+.box-window[data-toolbar-policy="focus"]:not(.box-focused) > .box-window-bar button:not(.box-expand-toggle) {
   display: none;
 }
 
-.box-icon[data-toolbar-policy="focus"]:not(.box-focused) button:not(.box-run-btn) {
+.box-icon[data-toolbar-policy="focus"]:not(.box-focused) button:not(.box-run-btn):not(.box-expand-toggle) {
   display: none;
 }
 

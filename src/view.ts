@@ -746,6 +746,18 @@ function buildIcon(box: Box): HTMLElement {
 
   applyBoxColors(box, el, el);
 
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "box-expand-toggle";
+  toggleBtn.title = "expand";
+  toggleBtn.textContent = "▶";
+  toggleBtn.onclick = () => {
+    const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  el.appendChild(toggleBtn);
+
   const label = document.createElement("span");
   label.className = "box-icon-label";
   label.textContent = getBoxTitle(box);
@@ -779,17 +791,6 @@ function buildIcon(box: Box): HTMLElement {
     };
     el.appendChild(runBtn);
   }
-
-  const expandBtn = document.createElement("button");
-  expandBtn.title = "expand";
-  expandBtn.textContent = "⬜";
-  expandBtn.onclick = () => {
-    const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  el.appendChild(expandBtn);
 
   el.dataset.boxId = box.id;
   const policy = resolveToolbarPolicy(box);
@@ -940,6 +941,29 @@ function buildStackCard(box: Box): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "mobile-card-bar";
 
+  const cardToggleBtn = document.createElement("button");
+  cardToggleBtn.className = "box-expand-toggle";
+  if (box.display === "icon") {
+    cardToggleBtn.title = "expand";
+    cardToggleBtn.textContent = "▶";
+    cardToggleBtn.onclick = () => {
+      const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+  } else {
+    cardToggleBtn.title = "collapse";
+    cardToggleBtn.textContent = "▼";
+    cardToggleBtn.onclick = () => {
+      const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
+      root = result.root;
+      worldId = result.worldId;
+      render();
+    };
+  }
+  bar.appendChild(cardToggleBtn);
+
   if (isPointer(box)) {
     const glyph = document.createElement("span");
     glyph.className = "box-pointer-glyph";
@@ -1005,30 +1029,6 @@ function buildStackCard(box: Box): HTMLElement {
     }
   };
   ribbon.appendChild(renameBtn);
-
-  if (box.display === "icon") {
-    const expandBtn = document.createElement("button");
-    expandBtn.title = "expand";
-    expandBtn.textContent = "⬜";
-    expandBtn.onclick = () => {
-      const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
-      root = result.root;
-      worldId = result.worldId;
-      render();
-    };
-    ribbon.appendChild(expandBtn);
-  } else {
-    const iconifyBtn = document.createElement("button");
-    iconifyBtn.title = "collapse";
-    iconifyBtn.textContent = "▪";
-    iconifyBtn.onclick = () => {
-      const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
-      root = result.root;
-      worldId = result.worldId;
-      render();
-    };
-    ribbon.appendChild(iconifyBtn);
-  }
 
   let textBtn: HTMLButtonElement | null = null;
   if (effectiveBox && box.display !== "icon") {
@@ -1225,6 +1225,18 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "box-titlebar box-window-bar";
 
+  const winToggleBtn = document.createElement("button");
+  winToggleBtn.className = "box-expand-toggle";
+  winToggleBtn.title = "collapse";
+  winToggleBtn.textContent = "▼";
+  winToggleBtn.onclick = () => {
+    const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
+    root = result.root;
+    worldId = result.worldId;
+    render();
+  };
+  bar.appendChild(winToggleBtn);
+
   if (isPointer(box)) {
     const glyph = document.createElement("span");
     glyph.className = "box-pointer-glyph";
@@ -1270,17 +1282,6 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
     }
   };
   ribbon.appendChild(renameBtn);
-
-  const iconBtn = document.createElement("button");
-  iconBtn.title = "minimize";
-  iconBtn.textContent = "▪";
-  iconBtn.onclick = () => {
-    const result = recordOn(root, worldId, mkSetDisplay(box, "icon"));
-    root = result.root;
-    worldId = result.worldId;
-    render();
-  };
-  ribbon.appendChild(iconBtn);
 
   const fullBtn = document.createElement("button");
   if (isPointer(box) && pointerTarget) {
