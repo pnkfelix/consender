@@ -544,6 +544,10 @@ function buildWorld(box: RegularBox): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = worldScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!worldScript) return;
       if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
@@ -994,6 +998,10 @@ function buildStackCard(box: Box): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = mobileScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!mobileScript) return;
       if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
@@ -1269,6 +1277,10 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
     runBtn.title = "run script";
     runBtn.textContent = "▶";
     runBtn.disabled = windowScript.length === 0;
+    runBtn.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
+      e.stopPropagation();
+    });
     runBtn.onclick = () => {
       if (!windowScript) return;
       if (focusedBoxId === null) { focusedBoxId = box.id; updateFocusHighlight(); }
