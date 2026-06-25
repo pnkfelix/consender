@@ -26,6 +26,8 @@ import {
 
 type ToolbarPolicy = "always" | "focus";
 
+const DEBUG = new URLSearchParams(window.location.search).get("debug") === "1";
+
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
@@ -80,8 +82,14 @@ function iconWidth(box: Box): number {
   if (!ctx) return ICON_OCCLUSION_W;
   const v = iconValueWord(box);
   const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-  const runExtra = getBoxScript(box) !== null ? 32 : 0;
-  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 52 + runExtra);
+  const hasScript = getBoxScript(box) !== null;
+  const runExtra = hasScript ? 32 : 0;
+  const textW = ctx.measureText(getBoxTitle(box)).width;
+  const total = Math.max(80, textW + extra + 52 + runExtra);
+  if (DEBUG) {
+    console.log(`[iconWidth] "${getBoxTitle(box)}" textW=${textW.toFixed(1)} extra=${extra.toFixed(1)} hasScript=${hasScript} runExtra=${runExtra} → ${total.toFixed(1)}`);
+  }
+  return total;
 }
 
 function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
@@ -474,6 +482,24 @@ export function mount(app: HTMLElement): void {
   });
 }
 
+function debugLogRenderedWidths(): void {
+  requestAnimationFrame(() => {
+    document.querySelectorAll<HTMLElement>(".box-icon").forEach(el => {
+      const label = el.querySelector(".box-icon-label")?.textContent ?? "?";
+      const r = el.getBoundingClientRect();
+      console.log(`[box-icon] "${label}" rendered w=${r.width.toFixed(1)} h=${r.height.toFixed(1)}`);
+    });
+    document.querySelectorAll<HTMLElement>(".mobile-chip").forEach(el => {
+      const label = el.querySelector(".mobile-chip-label")?.textContent ?? "?";
+      const hasRunBtn = !!el.querySelector(".box-run-btn");
+      const r = el.getBoundingClientRect();
+      const labelEl = el.querySelector<HTMLElement>(".mobile-chip-label");
+      const labelR = labelEl?.getBoundingClientRect();
+      console.log(`[mobile-chip] "${label}" hasRunBtn=${hasRunBtn} chip-w=${r.width.toFixed(1)} label-w=${labelR ? labelR.width.toFixed(1) : "?"}`);
+    });
+  });
+}
+
 function render(): void {
   console.log("[consender] render: worldId=", worldId);
   const world = findBox(root, worldId);
@@ -491,6 +517,7 @@ function render(): void {
     console.error("[consender] buildWorld threw:", err);
   }
   updateHelpBar();
+  if (DEBUG) debugLogRenderedWidths();
 }
 
 function buildWorld(box: RegularBox): HTMLElement {
