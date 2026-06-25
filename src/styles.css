@@ -664,7 +664,6 @@ html, body, #app {
   gap: 6px;
   margin-top: 6px;
   margin-left: 12px;
-  border-left: 2px solid var(--chrome);
   padding-left: 8px;
 }
 
