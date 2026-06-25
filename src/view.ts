@@ -71,13 +71,17 @@ function getMeasureCtx(): CanvasRenderingContext2D | null {
 }
 
 // Approximate rendered width of an icon: its title, an optional inline ": value"
-// for single-word valued icons, plus padding and the expand button.
+// for single-word valued icons, plus padding, the expand button, and the run
+// button (present only when the box has a script).
+// Overhead breakdown (px): left-pad(10) + expand-btn(26) + gap(6) + right-pad(10) = 52 base;
+// run button adds another gap(6) + btn(26) = 32.
 function iconWidth(box: Box): number {
   const ctx = getMeasureCtx();
   if (!ctx) return ICON_OCCLUSION_W;
   const v = iconValueWord(box);
   const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 68);
+  const runExtra = getBoxScript(box) !== null ? 32 : 0;
+  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 52 + runExtra);
 }
 
 function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
