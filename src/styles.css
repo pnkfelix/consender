@@ -560,6 +560,7 @@ html, body, #app {
 .mobile-chip {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
   gap: 4px;
   padding: 0 10px;
   min-height: 36px;

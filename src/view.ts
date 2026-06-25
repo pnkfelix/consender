@@ -1251,6 +1251,7 @@ function buildStackChip(box: Box): HTMLElement {
   const chipScript = effectiveBox ? getBoxScript(effectiveBox) : null;
   if (chipScript !== null) {
     const runBtn = document.createElement("button");
+    runBtn.className = "box-run-btn";
     runBtn.textContent = "▶";
     runBtn.title = "run script";
     runBtn.disabled = chipScript.length === 0;
