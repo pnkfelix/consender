@@ -658,7 +658,9 @@ html, body, #app {
 
 .mobile-card-children {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px;
   margin-top: 6px;
   margin-left: 12px;
