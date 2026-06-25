@@ -26,6 +26,8 @@ import {
 
 type ToolbarPolicy = "always" | "focus";
 
+const DEBUG = new URLSearchParams(window.location.search).get("debug") === "1";
+
 let appEl!: HTMLElement;
 let root!: Box;
 let worldId!: string;
@@ -71,13 +73,23 @@ function getMeasureCtx(): CanvasRenderingContext2D | null {
 }
 
 // Approximate rendered width of an icon: its title, an optional inline ": value"
-// for single-word valued icons, plus padding and the expand button.
+// for single-word valued icons, plus padding, the expand button, and the run
+// button (present only when the box has a script).
+// Overhead breakdown (px): left-pad(10) + expand-btn(26) + gap(6) + right-pad(10) = 52 base;
+// run button adds another gap(6) + btn(26) = 32.
 function iconWidth(box: Box): number {
   const ctx = getMeasureCtx();
   if (!ctx) return ICON_OCCLUSION_W;
   const v = iconValueWord(box);
   const extra = v !== null ? ctx.measureText(": " + v).width : 0;
-  return Math.max(80, ctx.measureText(getBoxTitle(box)).width + extra + 68);
+  const hasScript = getBoxScript(box) !== null;
+  const runExtra = hasScript ? 32 : 0;
+  const textW = ctx.measureText(getBoxTitle(box)).width;
+  const total = Math.max(80, textW + extra + 52 + runExtra);
+  if (DEBUG) {
+    console.log(`[iconWidth] "${getBoxTitle(box)}" textW=${textW.toFixed(1)} extra=${extra.toFixed(1)} hasScript=${hasScript} runExtra=${runExtra} → ${total.toFixed(1)}`);
+  }
+  return total;
 }
 
 function boxFootprint(box: Box): { x: number; y: number; w: number; h: number } {
@@ -470,6 +482,24 @@ export function mount(app: HTMLElement): void {
   });
 }
 
+function debugLogRenderedWidths(): void {
+  requestAnimationFrame(() => {
+    document.querySelectorAll<HTMLElement>(".box-icon").forEach(el => {
+      const label = el.querySelector(".box-icon-label")?.textContent ?? "?";
+      const r = el.getBoundingClientRect();
+      console.log(`[box-icon] "${label}" rendered w=${r.width.toFixed(1)} h=${r.height.toFixed(1)}`);
+    });
+    document.querySelectorAll<HTMLElement>(".mobile-chip").forEach(el => {
+      const label = el.querySelector(".mobile-chip-label")?.textContent ?? "?";
+      const hasRunBtn = !!el.querySelector(".box-run-btn");
+      const r = el.getBoundingClientRect();
+      const labelEl = el.querySelector<HTMLElement>(".mobile-chip-label");
+      const labelR = labelEl?.getBoundingClientRect();
+      console.log(`[mobile-chip] "${label}" hasRunBtn=${hasRunBtn} chip-w=${r.width.toFixed(1)} label-w=${labelR ? labelR.width.toFixed(1) : "?"}`);
+    });
+  });
+}
+
 function render(): void {
   console.log("[consender] render: worldId=", worldId);
   const world = findBox(root, worldId);
@@ -487,6 +517,7 @@ function render(): void {
     console.error("[consender] buildWorld threw:", err);
   }
   updateHelpBar();
+  if (DEBUG) debugLogRenderedWidths();
 }
 
 function buildWorld(box: RegularBox): HTMLElement {
@@ -1220,6 +1251,7 @@ function buildStackChip(box: Box): HTMLElement {
   const chipScript = effectiveBox ? getBoxScript(effectiveBox) : null;
   if (chipScript !== null) {
     const runBtn = document.createElement("button");
+    runBtn.className = "box-run-btn";
     runBtn.textContent = "▶";
     runBtn.title = "run script";
     runBtn.disabled = chipScript.length === 0;
