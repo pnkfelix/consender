@@ -663,9 +663,7 @@ html, body, #app {
   align-items: flex-start;
   gap: 6px;
   margin-top: 6px;
-  margin-left: 12px;
-  border-left: 2px solid var(--chrome);
-  padding-left: 8px;
+  padding-left: 4px;
 }
 
 /* Render layers inside mobile cards: flow layout instead of absolute fill */
