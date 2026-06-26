@@ -457,6 +457,9 @@ export function mount(app: HTMLElement): void {
   console.log("[consender] loaded state: worldId=", worldId, "root.id=", root?.id, "root type=", root && ("pointerToId" in root ? "pointer" : "regular"));
   render();
 
+  const layoutMq = window.matchMedia("(min-width: 600px)");
+  layoutMq.addEventListener("change", () => render());
+
   document.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.ctrlKey && e.key === "z") {
       e.preventDefault();
