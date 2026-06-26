@@ -1234,7 +1234,8 @@ function buildStackChip(box: Box): HTMLElement {
 
   const expandBtn = document.createElement("button");
   expandBtn.className = "box-expand-toggle";
-  expandBtn.textContent = "▶";
+  expandBtn.title = "expand";
+  expandBtn.textContent = "›";
   expandBtn.onclick = () => {
     const result = recordOn(root, worldId, mkSetDisplay(box, "window"));
     root = result.root;
