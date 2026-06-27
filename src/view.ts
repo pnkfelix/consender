@@ -637,11 +637,11 @@ function buildWorld(box: RegularBox): HTMLElement {
     row1.className = "mobile-world-bar-row";
     row1.appendChild(crumb);
     row1.appendChild(outBtn);
+    row1.appendChild(zoomSelBtn);
 
     const row2 = document.createElement("div");
     row2.className = "mobile-world-bar-row";
     row2.appendChild(newBtn);
-    row2.appendChild(zoomSelBtn);
     if (runBtn) row2.appendChild(runBtn);
     if (undoBtn) row2.appendChild(undoBtn);
     if (redoBtn) row2.appendChild(redoBtn);
