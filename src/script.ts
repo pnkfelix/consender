@@ -35,7 +35,7 @@ const BUILTINS: Record<string, Word> = {
       if (box && box.display !== "window") ctx.pendingOps.push(mkSetDisplay(box, "window"));
     }
   },
-  "clear-focus": (ctx) => {
+  "clear-selection": (ctx) => {
     ctx.selectedBoxIds.clear();
   },
   "help": (ctx) => {
