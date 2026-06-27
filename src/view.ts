@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import { isBuiltinCommand, runScript } from "./script.js";
+import { getBuiltinHelp, isBuiltinCommand, runScript } from "./script.js";
 import { parseColorWords, oklchToCss, blendColors, type Oklch } from "./color.js";
 import type { Box, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
@@ -121,33 +121,9 @@ function collectOccluders(box: Box, out: Set<string>): void {
   for (const { box: child } of kids) collectOccluders(child, out);
 }
 
-// Map box labels to context-sensitive help text shown in the help bar.
-const helpMap: Record<string, string> = {
-  "toolbarPolicy": "Controls toolbar visibility for sibling boxes. " +
-    "Text: \"focus\" hides buttons until a box is tapped; \"always\" keeps them visible. " +
-    "Place inside a parent to configure all its children. Walks up the tree if not found.",
-  "render": "Child-box property: sets the rendering mode for its parent box. " +
-    "Supported text values: \"svg\" — interprets the parent's text as inline SVG markup; " +
-    "\"markdown\" — renders the parent's text as formatted Markdown (CommonMark). " +
-    "A raw/mode toggle button appears in the parent's title bar to switch between source and rendered views.",
-  "script": "Tag: adding a child box named \"script\" marks the parent as a command script box. " +
-    "The command list lives in the parent's own text. The child itself needs no content. " +
-    "See the builtinCommands entry for available commands.",
-  "help": "consender: an infinite canvas of nested boxes. " +
-    "Zoom in/out to navigate, create and group boxes, edit text, undo/redo. " +
-    "Label child boxes with built-in names to configure behavior — see the builtinLabels entry.",
-  "backgroundColor": "Child-box property: sets the parent box's background fill, inherited by all " +
-    "descendants until one sets its own backgroundColor. Value: color words in the box's text " +
-    "(e.g. \"deep blue\", \"pale pink\", \"bluish green\"), or an \"oklch\" child box carrying L, C, H number boxes.",
-  "textColor": "Child-box property: sets the parent box's text color, inherited by all descendants " +
-    "until one sets its own textColor. Value: color words in the box's text (e.g. \"dark green\"), " +
-    "or an \"oklch\" child box carrying L, C, H number boxes.",
-  "oklch": "Color value: as a child of a backgroundColor/textColor box, carries L (0–1), C (0+), and " +
-    "H (0–360°) number boxes specifying a color directly in the OKLCH perceptual color space.",
-  "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script, " +
-    "backgroundColor, textColor, oklch.",
-  "builtinCommands": "Primitive script commands: help, iconify, windowify, clear-selection, link, darkTheme, lightTheme.",
-};
+// Context-sensitive help text shown in the help bar is sourced from the single
+// builtins namespace (see script.ts): a box whose label is a builtin shows that
+// builtin's help.
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
 // children walking up the chain. Nearer ancestor takes precedence.
@@ -184,7 +160,7 @@ function updateHelpBar(): void {
   const selectedBox = lastId ? findBox(root, lastId) : null;
   const world = findBox(root, worldId);
   const name = selectedBox != null ? getBoxTitle(selectedBox) : world != null ? getBoxTitle(world) : "";
-  const text = helpMap[name];
+  const text = getBuiltinHelp(name);
   helpEl.textContent = text ?? "";
   helpEl.style.display = text != null ? "block" : "none";
 }
