@@ -1,7 +1,7 @@
 import { marked } from "marked";
 import { isBuiltinCommand, runScript } from "./script.js";
 import { parseColorWords, oklchToCss, blendColors, type Oklch } from "./color.js";
-import type { Box, RegularBox } from "./model.js";
+import type { Box, Cursor, CursorAnchor, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
 import {
   canUndo,
@@ -727,6 +727,8 @@ function buildWorld(box: RegularBox): HTMLElement {
         const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
         root = result.root;
         worldId = result.worldId;
+        clampCursors(box);
+        persist(root, worldId);
       }
       render();
     };
@@ -897,6 +899,73 @@ function freeSpans(
   return spans;
 }
 
+// ---- cursors (rendered program counters / edit points) ----
+
+// Fallback color when a cursor carries no color of its own. Per-agent cursors
+// will each supply their own color; a lone cursor uses this.
+const DEFAULT_CURSOR_COLOR = "#1c7ed6";
+
+// Distance from a text line's top (the `top` we position .box-text spans at) down
+// to the glyph baseline, given the .box-text line-height of 1.55. The line box is
+// LINE_H tall with the em vertically centered, so the baseline sits at the top
+// leading plus the font ascent (~0.8em for our monospace stack).
+const TEXT_BASELINE = (LINE_H - TEXT_SIZE) / 2 + TEXT_SIZE * 0.8;
+// Staple/U marker geometry: a touch wider than tall so it reads as a staple.
+const STAPLE_W = Math.round(TEXT_SIZE * 0.62);
+const STAPLE_H = Math.round(TEXT_SIZE * 0.7);
+// Width of the synthetic hit zone for the leading/trailing insertion gaps.
+const GAP_HIT_W = 12;
+
+function wordCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+function resolveCursorColor(cursor: Cursor): string {
+  if (!cursor.color) return DEFAULT_CURSOR_COLOR;
+  const oklch = parseColorWords(cursor.color);
+  return oklch ? oklchToCss(oklch) : cursor.color;
+}
+
+function anchorsEqual(a: CursorAnchor, b: CursorAnchor): boolean {
+  if (a.kind === "gap" && b.kind === "gap") return a.index === b.index;
+  if (a.kind === "span" && b.kind === "span") return a.start === b.start && a.end === b.end;
+  return false;
+}
+
+// Place (or, when it matches the box's existing single cursor, clear) a cursor.
+// Cursor placement is navigation, so it persists but is not pushed on the undo
+// stack. Replaces any existing cursors — the initial deliverable is single-cursor.
+function placeCursor(box: RegularBox, anchor: CursorAnchor): void {
+  const existing = box.cursors?.[0];
+  if (box.cursors?.length === 1 && existing && anchorsEqual(existing.anchor, anchor)) {
+    box.cursors = undefined;
+  } else {
+    box.cursors = [{ anchor, color: DEFAULT_CURSOR_COLOR }];
+  }
+  persist(root, worldId);
+  render();
+}
+
+// After the text changes, keep any cursors addressing valid positions. Word
+// indices shift on edit, so clamp gaps into 0..N and drop spans that fall off
+// the end; an empty box has no positions, so cursors are cleared.
+function clampCursors(box: RegularBox): void {
+  if (!box.cursors || box.cursors.length === 0) return;
+  const n = wordCount(box.text);
+  if (n === 0) { box.cursors = undefined; return; }
+  const kept = box.cursors.filter(c => {
+    if (c.anchor.kind === "gap") {
+      c.anchor.index = Math.max(0, Math.min(c.anchor.index, n));
+      return true;
+    }
+    if (c.anchor.start >= n) return false;
+    c.anchor.start = Math.max(0, c.anchor.start);
+    c.anchor.end = Math.min(c.anchor.end, n - 1);
+    return c.anchor.start <= c.anchor.end;
+  });
+  box.cursors = kept.length > 0 ? kept : undefined;
+}
+
 // Builds the text overlay layer for a box that has text content.
 // Child boxes keep their absolute positions; text fills the gaps.
 // bodyW/bodyH default to the box's own stored size; pass larger values for fullscreen.
@@ -922,6 +991,27 @@ function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_B
   let pIdx = 0;
   let wIdx = 0;
 
+  // Pixel x-range and line-top of each rendered word, indexed by its flat word
+  // index (the same index cursors and computeTextMigration use). Words clipped
+  // by overflow are left undefined; cursors on them simply don't render.
+  const wordPositions: Array<{ x0: number; x1: number; y: number } | undefined> = [];
+  const totalWords = paraWords.reduce((n, p) => n + p.length, 0);
+  let gIdx = 0;
+
+  // In "act" mode the text becomes an edit surface: tapping a word puts the
+  // cursor on it (underline), tapping a between-word gap puts the cursor there
+  // (staple). Decorations always render; only the hit zones are mode-gated.
+  const interactive = mode === "act";
+  const addHit = (x: number, w: number, top: number, anchor: CursorAnchor): void => {
+    if (w <= 0) return;
+    const hz = document.createElement("div");
+    hz.className = "box-cursor-hit";
+    hz.style.cssText = `position:absolute;left:${x}px;top:${top}px;width:${w}px;height:${LINE_H}px;pointer-events:auto;cursor:pointer;`;
+    hz.addEventListener("pointerdown", e => e.stopPropagation());
+    hz.addEventListener("click", e => { e.stopPropagation(); placeCursor(box, anchor); });
+    layer.appendChild(hz);
+  };
+
   for (let y = BODY_PAD; pIdx < paraWords.length && y + LINE_H <= bodyH - BODY_PAD; y += LINE_H) {
     if (paraWords[pIdx].length === 0) { pIdx++; continue; }
     const spans = freeSpans(y, BODY_PAD, bodyW - BODY_PAD, regions);
@@ -929,12 +1019,21 @@ function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_B
       const avail = ex - sx;
       if (avail < TEXT_SIZE * 2) continue;
       const lineWords: string[] = [];
+      const lineMeta: Array<{ index: number; x0: number; x1: number }> = [];
       let lineW = 0;
       while (wIdx < paraWords[pIdx].length) {
+        const word = paraWords[pIdx][wIdx];
         const sep = lineWords.length > 0 ? " " : "";
-        const cw = ctx.measureText(sep + paraWords[pIdx][wIdx]).width;
+        const cw = ctx.measureText(sep + word).width;
         if (lineWords.length > 0 && lineW + cw > avail) break;
-        lineWords.push(paraWords[pIdx][wIdx++]);
+        const sepW = lineWords.length > 0 ? ctx.measureText(" ").width : 0;
+        const x0 = sx + lineW + sepW;
+        const x1 = x0 + (cw - sepW);
+        lineMeta.push({ index: gIdx, x0, x1 });
+        wordPositions[gIdx] = { x0, x1, y };
+        gIdx++;
+        wIdx++;
+        lineWords.push(word);
         lineW += cw;
       }
       const endOfParagraph = wIdx >= paraWords[pIdx].length;
@@ -946,7 +1045,46 @@ function buildTextLayer(box: RegularBox, bodyW = box.w, bodyH = box.h - WINDOW_B
         s.textContent = lineWords.join(" ");
         layer.appendChild(s);
       }
+      if (interactive && lineMeta.length > 0) {
+        for (const m of lineMeta) addHit(m.x0, m.x1 - m.x0, y, { kind: "span", start: m.index, end: m.index });
+        // Each between-word gap belongs to the word to its right (gap index ==
+        // right word's index), so it is emitted exactly once across all lines.
+        for (let k = 1; k < lineMeta.length; k++) {
+          addHit(lineMeta[k - 1].x1, lineMeta[k].x0 - lineMeta[k - 1].x1, y, { kind: "gap", index: lineMeta[k].index });
+        }
+        const first = lineMeta[0];
+        if (first.index === 0) addHit(Math.max(0, first.x0 - GAP_HIT_W), Math.min(GAP_HIT_W, first.x0), y, { kind: "gap", index: 0 });
+        const last = lineMeta[lineMeta.length - 1];
+        if (last.index === totalWords - 1) addHit(last.x1, GAP_HIT_W, y, { kind: "gap", index: totalWords });
+      }
       if (endOfParagraph || pIdx >= paraWords.length) break;
+    }
+  }
+
+  for (const cursor of box.cursors ?? []) {
+    const color = resolveCursorColor(cursor);
+    const a = cursor.anchor;
+    if (a.kind === "span") {
+      for (let i = a.start; i <= a.end; i++) {
+        const wp = wordPositions[i];
+        if (!wp) continue;
+        const u = document.createElement("div");
+        u.className = "box-cursor-underline";
+        u.style.cssText = `left:${wp.x0}px;top:${wp.y + TEXT_BASELINE + 1}px;width:${Math.max(1, wp.x1 - wp.x0)}px;background:${color};`;
+        layer.appendChild(u);
+      }
+    } else {
+      // Anchor the staple at the left edge of the word the gap precedes; for the
+      // trailing gap (no such word) use the right edge of the last word.
+      const at = wordPositions[a.index];
+      const prev = at ? null : wordPositions[a.index - 1];
+      const gx = at ? at.x0 : prev?.x1;
+      const gy = at ? at.y : prev?.y;
+      if (gx === undefined || gy === undefined) continue;
+      const st = document.createElement("div");
+      st.className = "box-cursor-staple";
+      st.style.cssText = `left:${gx - STAPLE_W / 2}px;top:${gy + TEXT_BASELINE - STAPLE_H}px;width:${STAPLE_W}px;height:${STAPLE_H}px;border-color:${color};`;
+      layer.appendChild(st);
     }
   }
 
@@ -1177,6 +1315,8 @@ function buildStackCard(box: Box): HTMLElement {
             const result = recordOn(root, worldId, mkSetBoxText(textTarget, ta.value));
             root = result.root;
             worldId = result.worldId;
+            clampCursors(textTarget);
+            persist(root, worldId);
           }
           render();
         };
@@ -1569,6 +1709,8 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
         const result = recordOn(root, worldId, mkSetBoxText(textTarget, ta.value));
         root = result.root;
         worldId = result.worldId;
+        clampCursors(textTarget);
+        persist(root, worldId);
       }
       render();
     };

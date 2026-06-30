@@ -2,6 +2,28 @@ export type DisplayMode = "icon" | "window";
 
 export interface PositionRecord { id: string; x: number; y: number }
 
+// A cursor addresses a position in a box's text, which is treated as a flat
+// sequence of whitespace-separated words (the same flattening used everywhere
+// else — see computeTextMigration). It is the rendered form of a per-agent
+// program counter / edit point. Two shapes:
+//   - "gap"  sits between word[index-1] and word[index] (index in 0..N, where
+//            N is the word count); it marks an insertion point and renders as a
+//            staple/U marker on the baseline.
+//   - "span" covers words [start, end] inclusive; it marks the words an edit
+//            would replace and renders as an underline.
+export type CursorAnchor =
+  | { kind: "gap"; index: number }
+  | { kind: "span"; start: number; end: number };
+
+// A box may carry several cursors at once (one per agent, each with its own
+// color) — the program-counter motive. The initial deliverable only ever
+// places a single cursor, but the model and renderer handle a list.
+export interface Cursor {
+  anchor: CursorAnchor;
+  // CSS color or color-words phrase (see color.ts). Omitted → default color.
+  color?: string;
+}
+
 export interface NamedChild {
   title: string;
   box: Box;
@@ -64,6 +86,7 @@ export interface SerializedBox {
   w: number;
   h: number;
   text?: string;
+  cursors?: Cursor[];
   pointerToId?: string;
   pointerPath?: string;
 }
@@ -83,6 +106,9 @@ export interface RegularBox {
   w: number;
   h: number;
   text: string;
+  // Rendered program counters / edit points into `text`. Navigation state, not
+  // model state: cursor moves persist but are not recorded on the undo stack.
+  cursors?: Cursor[];
   undoStack: StackEntry[];
   redoStack: StackEntry[];
 }
