@@ -708,39 +708,7 @@ function buildWorld(box: RegularBox): HTMLElement {
   el.appendChild(content);
 
   textBtn.onclick = () => {
-    const existing = content.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
-    if (existing) { existing.focus(); return; }
-    content.innerHTML = "";
-
-    const ta = document.createElement("textarea");
-    ta.className = "box-text-editor";
-    ta.value = box.text;
-    ta.placeholder = "Enter text…";
-
-    const prevText = box.text;
-    let done = false;
-
-    const commit = () => {
-      if (done) return;
-      done = true;
-      if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
-        root = result.root;
-        worldId = result.worldId;
-        clampCursors(box);
-        persist(root, worldId);
-      }
-      render();
-    };
-
-    ta.addEventListener("blur", commit);
-    ta.addEventListener("keydown", (ke: KeyboardEvent) => {
-      ke.stopPropagation();
-      if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
-    });
-
-    content.appendChild(ta);
-    ta.focus();
+    mountTextEditor(content, box);
   };
 
   return el;
@@ -964,6 +932,120 @@ function clampCursors(box: RegularBox): void {
     return c.anchor.start <= c.anchor.end;
   });
   box.cursors = kept.length > 0 ? kept : undefined;
+}
+
+// ---- cursor <-> text-editor caret bridge ----
+//
+// The cursor addresses words; the <textarea> addresses characters. These map
+// between the two so an edit can start at the cursor and the cursor can follow
+// where the edit ends. Word tokenization here (maximal non-space runs) matches
+// the whitespace splitting used everywhere else.
+
+function wordCharRanges(text: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  const re = /\S+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) ranges.push({ start: m.index, end: m.index + m[0].length });
+  return ranges;
+}
+
+// Character range to pre-select in the editor for a cursor: a span selects its
+// words; a gap collapses to a caret at the word boundary it sits before.
+function cursorToSelection(text: string, cursor: Cursor): [number, number] {
+  const r = wordCharRanges(text);
+  if (r.length === 0) return [text.length, text.length];
+  const a = cursor.anchor;
+  if (a.kind === "span") {
+    const s = Math.max(0, Math.min(a.start, r.length - 1));
+    const e = Math.max(s, Math.min(a.end, r.length - 1));
+    return [r[s].start, r[e].end];
+  }
+  if (a.index <= 0) return [r[0].start, r[0].start];
+  if (a.index >= r.length) return [r[r.length - 1].end, r[r.length - 1].end];
+  return [r[a.index].start, r[a.index].start];
+}
+
+// Where the editor caret/selection ended up, expressed as a cursor: a non-empty
+// selection becomes a span over the words it touches; a collapsed caret becomes
+// a gap at the nearest word boundary (mid-word snaps to the closer side).
+function selectionToCursor(text: string, selStart: number, selEnd: number): CursorAnchor | null {
+  const r = wordCharRanges(text);
+  if (r.length === 0) return null;
+
+  if (selStart !== selEnd) {
+    let first = -1, last = -1;
+    for (let i = 0; i < r.length; i++) {
+      if (r[i].start < selEnd && selStart < r[i].end) { if (first === -1) first = i; last = i; }
+    }
+    if (first !== -1) return { kind: "span", start: first, end: last };
+    // Selection spans only whitespace: fall through to the collapsed-caret case.
+    selEnd = selStart;
+  }
+
+  const c = selStart;
+  if (c <= r[0].start) return { kind: "gap", index: 0 };
+  if (c >= r[r.length - 1].end) return { kind: "gap", index: r.length };
+  for (let i = 0; i < r.length; i++) {
+    if (c <= r[i].start) return { kind: "gap", index: i };       // in the gap before word i
+    if (c < r[i].end) {                                          // inside word i
+      return { kind: "gap", index: (c - r[i].start) <= (r[i].end - c) ? i : i + 1 };
+    }
+  }
+  return { kind: "gap", index: r.length };
+}
+
+// Opens the desktop text editor for a box, replacing the host's content with a
+// <textarea>. The box's cursor (if any) drives the edit: it seeds the caret /
+// selection on open, and on commit the final caret / selection becomes the
+// box's cursor — so editing at the cursor is the round trip. A box with no
+// cursor edits exactly as before. Cursor sync is navigation and is not recorded
+// on the undo stack (only the text change is).
+function mountTextEditor(host: HTMLElement, box: RegularBox): void {
+  const existing = host.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
+  if (existing) { existing.focus(); return; }
+  host.innerHTML = "";
+
+  const ta = document.createElement("textarea");
+  ta.className = "box-text-editor";
+  ta.value = box.text;
+  ta.placeholder = "Enter text…";
+
+  const prevText = box.text;
+  const seedCursor = box.cursors?.[0];
+  let done = false;
+
+  const commit = (): void => {
+    if (done) return;
+    done = true;
+    if (ta.value !== prevText) {
+      const result = recordOn(root, worldId, mkSetBoxText(box, ta.value));
+      root = result.root;
+      worldId = result.worldId;
+    }
+    // When the edit was cursor-driven, the cursor follows the caret to wherever
+    // editing ended; otherwise just keep any cursor in valid range.
+    if (seedCursor) {
+      const anchor = selectionToCursor(box.text, ta.selectionStart, ta.selectionEnd);
+      box.cursors = anchor ? [{ anchor, color: seedCursor.color }] : undefined;
+    } else {
+      clampCursors(box);
+    }
+    persist(root, worldId);
+    render();
+  };
+
+  ta.addEventListener("blur", commit);
+  ta.addEventListener("keydown", (ke: KeyboardEvent) => {
+    ke.stopPropagation();
+    if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
+  });
+
+  host.appendChild(ta);
+  ta.focus();
+  if (seedCursor) {
+    const [s, e] = cursorToSelection(box.text, seedCursor);
+    ta.setSelectionRange(s, e);
+  }
 }
 
 // Builds the text overlay layer for a box that has text content.
@@ -1688,42 +1770,10 @@ function buildWindow(box: Box, parentBodyRect: ScreenRect): HTMLElement {
   if (effectiveBox) makeLassoGesture(body, effectiveBox, true);
 
   if (textBtn && effectiveBox) {
-  const textTarget = effectiveBox;
-  textBtn.onclick = () => {
-    const existing = body.querySelector(".box-text-editor") as HTMLTextAreaElement | null;
-    if (existing) { existing.focus(); return; }
-    body.innerHTML = "";
-
-    const ta = document.createElement("textarea");
-    ta.className = "box-text-editor";
-    ta.value = textTarget.text;
-    ta.placeholder = "Enter text…";
-
-    const prevText = textTarget.text;
-    let done = false;
-
-    const commit = () => {
-      if (done) return;
-      done = true;
-      if (ta.value !== prevText) {
-        const result = recordOn(root, worldId, mkSetBoxText(textTarget, ta.value));
-        root = result.root;
-        worldId = result.worldId;
-        clampCursors(textTarget);
-        persist(root, worldId);
-      }
-      render();
+    const textTarget = effectiveBox;
+    textBtn.onclick = () => {
+      mountTextEditor(body, textTarget);
     };
-
-    ta.addEventListener("blur", commit);
-    ta.addEventListener("keydown", (ke: KeyboardEvent) => {
-      ke.stopPropagation();
-      if (ke.key === "Escape") { ke.preventDefault(); done = true; render(); }
-    });
-
-    body.appendChild(ta);
-    ta.focus();
-  };
   }
 
   el.appendChild(body);
