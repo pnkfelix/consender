@@ -1,6 +1,7 @@
 import { applyOp, findBox, mkAddBox, mkAddPointer, mkSetDisplay, persist } from "./history.js";
 import type { Box, DisplayMode, Op, RegularBox } from "./model.js";
 import { getBoxTitle, isPointer } from "./model.js";
+import { isTrsBox, makeTrsOps, runTrsOps, stepTrsOps } from "./trs.js";
 
 interface ScriptContext {
   root: Box;
@@ -90,7 +91,36 @@ const BUILTINS: Record<string, Word> = {
     ctx.selectedBoxIds.clear();
     for (const id of newIds) ctx.selectedBoxIds.add(id);
   },
+  // Mark the focused box as a TRS (toy term-rewriting system) and seed a
+  // runnable demo if it has no world/agents yet.  See src/trs.ts.
+  "make-trs": (ctx) => {
+    const dest = trsFocusDest(ctx);
+    if (!dest) return;
+    for (const op of makeTrsOps(dest, ctx.root, ctx.worldId)) ctx.pendingOps.push(op);
+  },
+  // Advance the focused TRS box by one global evaluation step.
+  "trs-step": (ctx) => {
+    const dest = trsFocusDest(ctx);
+    if (!dest || !isTrsBox(dest)) return;
+    for (const op of stepTrsOps(dest, ctx.root, ctx.worldId)) ctx.pendingOps.push(op);
+  },
+  // Run the focused TRS box until every agent halts (or a step cap is hit).
+  "trs-run": (ctx) => {
+    const dest = trsFocusDest(ctx);
+    if (!dest || !isTrsBox(dest)) return;
+    for (const op of runTrsOps(dest, ctx.root, ctx.worldId)) ctx.pendingOps.push(op);
+  },
 };
+
+// Resolve the box a TRS command acts on: the focused box, following a pointer to
+// its target so the command operates on the structure the UI actually renders.
+function trsFocusDest(ctx: ScriptContext): RegularBox | null {
+  if (!ctx.focusedBoxId) return null;
+  const focusBox = findBox(ctx.root, ctx.focusedBoxId);
+  if (!focusBox) return null;
+  const dest = isPointer(focusBox) ? findBox(ctx.root, focusBox.pointerToId) : focusBox;
+  return dest && !isPointer(dest) ? dest : null;
+}
 
 export function isBuiltinCommand(word: string): boolean {
   return Object.prototype.hasOwnProperty.call(BUILTINS, word);
