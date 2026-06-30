@@ -145,8 +145,13 @@ const helpMap: Record<string, string> = {
   "oklch": "Color value: as a child of a backgroundColor/textColor box, carries L (0–1), C (0+), and " +
     "H (0–360°) number boxes specifying a color directly in the OKLCH perceptual color space.",
   "builtinLabels": "Built-in labels: world, box, group, toolbarPolicy, render, script, " +
-    "backgroundColor, textColor, oklch.",
-  "builtinCommands": "Primitive script commands: help, iconify, windowify, clear-selection, link, darkTheme, lightTheme.",
+    "backgroundColor, textColor, oklch, type.",
+  "builtinCommands": "Primitive script commands: help, iconify, windowify, clear-selection, link, " +
+    "darkTheme, lightTheme, make-trs, trs-step, trs-run.",
+  "type": "Tag: a child box named \"type\" declares its parent's kind from its text. " +
+    "Value \"trs\" makes the parent a toy term-rewriting system: a \"world\" child holds the term " +
+    "(nested boxes, order-insignificant), and an \"agents\" child holds agent boxes, each with " +
+    "command/focus/selection/control text children. Focus the TRS box and run make-trs, trs-step, or trs-run.",
 };
 
 // A box's toolbarPolicy comes from its own children first, then ancestor
