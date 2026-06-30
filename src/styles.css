@@ -194,6 +194,34 @@ html, body, #app {
   pointer-events: none;
 }
 
+/* ---- cursors: rendered program counters / edit points ---- */
+/* A cursor covering a word (or run of words) underlines them. */
+.box-cursor-underline {
+  position: absolute;
+  height: 2px;
+  border-radius: 1px;
+  pointer-events: none;
+  /* background (the cursor color) is set inline */
+}
+
+/* A cursor sitting in a between-word gap shows a stout, staple-like U whose
+   bottom rests on the text baseline (left/right/bottom strokes, open top). */
+.box-cursor-staple {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-top: none;
+  border-radius: 1px;
+  pointer-events: none;
+  /* border-color (the cursor color) is set inline */
+}
+
+/* Transparent tap targets that let "act" mode place a cursor on a word or gap. */
+.box-cursor-hit {
+  position: absolute;
+  background: transparent;
+}
+
 .box-btn-has-text {
   background: #2a4a2a !important;
   color: #c8f0c8 !important;

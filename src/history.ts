@@ -88,6 +88,7 @@ function collectSubtree(box: Box, acc: Record<string, SerializedBox>): void {
       w: box.w,
       h: box.h,
       text: box.text || undefined,
+      cursors: box.cursors && box.cursors.length > 0 ? box.cursors : undefined,
     };
     for (const { box: child } of box.children) {
       collectSubtree(child, acc);
@@ -150,6 +151,7 @@ export function deserializeOpSubtree(subtree: OpSubtree): Box {
         w: s.w,
         h: s.h,
         text: s.text ?? "",
+        cursors: s.cursors,
         undoStack: [],
         redoStack: [],
       };
@@ -196,6 +198,7 @@ function collectPersistedSubtree(
       w: box.w,
       h: box.h,
       text: box.text || undefined,
+      cursors: box.cursors && box.cursors.length > 0 ? box.cursors : undefined,
       undoStack: box.undoStack,
       redoStack: box.redoStack,
     };
@@ -262,6 +265,7 @@ export function deserializeFullTree(data: PersistedState["tree"]): Box {
         w: s.w,
         h: s.h,
         text: s.text ?? "",
+        cursors: s.cursors,
         undoStack: migrateStackEntries(s.undoStack ?? []),
         redoStack: migrateStackEntries(s.redoStack ?? []),
       };
